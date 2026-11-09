@@ -1,7 +1,9 @@
 name: build (zevic-c)
 
-# Every push builds zevic (the C compiler) on Linux, macOS and Windows and runs the tests.
-# Releases are made by the self-hosted repository, zevic-lang/zevic.
+# Every push to main builds zevic (the C compiler) on Linux, macOS and Windows, runs the tests and,
+# when all three succeed, publishes the executables as a GitHub release (v<VERSION>-build.N).
+# Pushing a tag like v0.4.1 publishes a normal (non-pre-release) release instead.
+# The self-hosted compiler is released by zevic-lang/zevic.
 
 on:
   push:
@@ -168,6 +170,7 @@ jobs:
           zevic "$GITHUB_WORKSPACE/examples/01_hello.zev" -o hello && ./hello
           zevpm new app && cd app && zevpm run && zevpm test
           sudo apt-get remove -y zevic
+          hash -r
           ! command -v zevic
       - name: Smoke test the .pkg (macOS)
         if: runner.os == 'macOS'
@@ -185,3 +188,56 @@ jobs:
           name: zevic-${{ matrix.name }}
           path: dist/extra/*
           if-no-files-found: error
+
+  release:
+    name: release
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Decide the release tag
+        id: tag
+        run: |
+          VERSION="$(cat VERSION)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=v${VERSION}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes
+        run: |
+          ARGS="--tag ${{ steps.tag.outputs.name }}"
+          if [ "${{ steps.tag.outputs.prerelease }}" = "true" ]; then ARGS="$ARGS --prerelease"; fi
+          mkdir -p build; cc -std=c11 -O1 tools/release_notes.c -o build/release_notes
+          build/release_notes $ARGS --assets artifacts/* > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: zevic ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ steps.tag.outputs.prerelease == 'true' }}
+          body_path: RELEASE_NOTES.md
+          files: artifacts/*

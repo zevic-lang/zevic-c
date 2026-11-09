@@ -36,9 +36,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <time.h>
 #ifdef _WIN32
 #else
-#include <time.h>
 #include <dirent.h>
 #include <sys/wait.h>
 #include <unistd.h>

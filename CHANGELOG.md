@@ -2,7 +2,7 @@
 
 ## Split from zevic-lang/zevic (after 0.4.1)
 
-This repository keeps the C implementation (`zevic0`, `zevpm/`). The self-hosting compiler (`tools/zevic1`) and `bootstrap/` were removed here; they live in zevic-lang/zevic. History up to v0.4.1 is shared with that repository.
+This repository keeps the C implementation (`zevic0`, `zevpm/`). The self-hosting compiler (`tools/zevic1`) and `bootstrap/` were removed here; they live in zevic-lang/zevic. History up to v0.4.1 is shared with that repository. CI builds, tests and releases the C compiler on Linux, macOS and Windows as before; version 0.4.1.
 
 ## 0.4.1
 
