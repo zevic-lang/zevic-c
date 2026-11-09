@@ -1,3 +1,17 @@
+# zevic-c
+
+Zevic 言語の **C 実装**(`zevic0`)です。Zevic 自身で書かれたセルフホスト版コンパイラは [zevic-lang/zevic](https://github.com/zevic-lang/zevic) にあります(`zevic-lang/zevic` は `bootstrap/zevic.ll` と clang だけでビルドでき、このリポジトリは要りません)。
+
+このリポジトリは v0.4.1 時点で分離した C 版で、次の用途のために残してあります。
+
+- 最初のコンパイラとして、Zevic のコンパイラを一から作り直す(新しい OS や CPU への持ち込みなど)
+- セルフホスト版と出力を突き合わせる参照実装
+- 標準ライブラリ(`packages/Zevic`)・ランタイム(`runtime/`)・テストのコピー。本体との同期は手作業です
+
+以降の説明は分離時点のものです。
+
+---
+
 # Zevic
 
 Zevic(仮称)は、Cの資産をそのまま使える、小さくて書きやすいネイティブ言語です。
@@ -85,7 +99,7 @@ zevpm build --release    # build/ に出力(ライブラリは .a と include/<N
 
 v0.4.1: 型、`struct`/`class`/`enum`、ユニオン型(`A | B`、`is`、型パターン)、`interface`、ジェネリクス、クロージャ、`defer`、GC、C との連携、
 `test` ブロック、ループのラベル(`break@名前`)、`async`/`await`、HTTP(`Zevic.Http`、TLSなし)、`zevpm`、標準ライブラリ(`Fs` `Env` `Text` `Math` `Time` `Process` `Random` `Json` `Path` `DateTime` `Regex` `Csv` `Toml` `Net` `Zip` `Gzip` など)まで動きます。
-`zevfmt`(整形: `zevfmt -w .`、検査: `zevfmt -check .`)も動きます。コンパイラ自身も Zevic で書かれており(`tools/zevic1/`)、自分自身をビルドできます(`make bootstrap`)。計画は [`docs/plan.md`](docs/plan.md)。
+`zevfmt`(整形: `zevfmt -w .`、検査: `zevfmt -check .`)も動きます。計画は [`docs/plan.md`](docs/plan.md)。
 
 仕様書は草案です。実装の進み具合は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 

@@ -1,4 +1,0 @@
-module Zevic1.Version
-
-// Generated from the file VERSION by `make` (do not edit).
-let Current: String = "0.4.1"
