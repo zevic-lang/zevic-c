@@ -1,0 +1,17 @@
+module Main
+
+import Zevic.Console
+
+let Text: String = """
+hello ${1 + 2} "quoted" \"""
+  world
+"""
+
+let Raw: String = r"""
+a\b ${x}
+"""
+
+fn Main() {
+    Console.Println(Text)
+    Console.Println(Raw)
+}
