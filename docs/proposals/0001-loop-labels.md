@@ -1,12 +1,12 @@
-# 提案 0001: ループのラベルと `break@ラベル` `continue@ラベル`
+# Proposal 0001: loop labels, `break@label` and `continue@label`
 
-- 状態: 採用(2026-11-03、実装は同日)
-- 日付: 2026-11-03
+- Status: accepted (2026-11-03, implemented the same day)
+- Date: 2026-11-03
 
-## 動機
+## Motivation
 
-仕様書では「`break`と`continue`は一番内側のループに効く。ラベル付きの`break`は、今はない」とある。
-二重ループから一度に抜けるには、フラグ変数を作るか、関数に切り出して`return`するしかない。
+The specification says "`break` and `continue` act on the innermost loop. There is no labeled `break` for now."
+To leave a double loop at once, you have to use a flag variable, or move the loop into a function and `return`.
 
 ```
 mut found: Bool = false
@@ -18,9 +18,9 @@ for (row in rows) {
 }
 ```
 
-## 提案
+## Proposal
 
-Kotlin と同じ形で、ループにラベルを付け、`break@ラベル` と `continue@ラベル` で外側のループを指す。
+As in Kotlin, a loop gets a label, and `break@label` and `continue@label` refer to an outer loop.
 
 ```
 outer@ for (row in rows) {
@@ -31,39 +31,39 @@ outer@ for (row in rows) {
 }
 ```
 
-- ラベルは `名前@` を、`while` `loop` `for` の直前に、同じ行に書く。ラベルを付けられるのはこの3つだけ
-- `break@名前` `continue@名前` は、`break` と `@` と名前の間に空白を入れない(`break @x` や `break@ x` は構文エラー)。`@` の後ろの名前はラベルであって、式ではない
-- ラベルが指すのは、**同じ関数の中で**、その位置を囲んでいるラベル付きループ。ラムダの境界は越えられない(既存の規則どおり、ラムダの中の`break`はラムダの中のループにしか効かない)
-- 存在しないラベルはコンパイルエラー。囲んでいるループに同じ名前のラベルがあるときもエラー(隠さない)
-- `break@名前` が抜ける間にある `defer` は、`break` と同じく内側から順に実行する
-- ラベルなしの `break` `continue` は今まで通り、一番内側のループに効く
-- `break@名前` `continue@名前` は式として `Never` 型(`break` と同じで、どの式の位置にも書ける)
-- ラベル名は小文字始まりでも大文字始まりでもよい(モジュールをまたがないので公開・非公開の区別はない)
+- A label is `name@`, written on the same line directly before `while`, `loop` or `for`. Only these three can carry a label.
+- In `break@name` and `continue@name` there is no space between `break`, `@` and the name (`break @x` and `break@ x` are syntax errors). The name after `@` is a label, not an expression.
+- A label refers to an enclosing labeled loop **in the same function**. It cannot cross a lambda boundary (as before, a `break` inside a lambda only affects loops inside that lambda).
+- An unknown label is a compile error. So is a label that has the same name as the label of an enclosing loop (labels do not shadow).
+- The `defer`s between the `break@name` and the loop it leaves run from the inside out, as with `break`.
+- `break` and `continue` without a label work as before, on the innermost loop.
+- `break@name` and `continue@name` have the type `Never` as expressions (like `break`, they can be written in any expression position).
+- A label name may start with a lowercase or an uppercase letter (labels do not cross modules, so there is no public / private distinction).
 
-文法:
+Grammar:
 
 ```
 labeled   = ident '@' ( whileStmt | loopStmt | forStmt )
-jump      = ( 'break' | 'continue' ) [ '@' ident ]     ※ '@' は直前・直後に空白なし
+jump      = ( 'break' | 'continue' ) [ '@' ident ]     (no space before or after '@')
 ```
 
-## 他の案
+## Alternatives
 
-- `break outer`(Swift/Go 風): ラベル名と式が見分けにくく、`break` が値を取る将来の拡張とぶつかる。選ばない
-- `'outer: for`(Rust 風): `:` は型注釈と、`'` は文字リテラルとぶつかる
-- `outer: for`(Go/Java 風): `:` が型注釈やマップ風の記法と紛らわしい
-- 関数に切り出す、`Option` を返す: 今でもできる。ラベルは追加しても邪魔にならない
+- `break outer` (Swift / Go style): the label name is hard to tell from an expression, and it collides with a possible future where `break` takes a value. Not chosen.
+- `'outer: for` (Rust style): `:` collides with type annotations and `'` with character literals.
+- `outer: for` (Go / Java style): `:` is easily confused with type annotations and map-like notation.
+- Moving the loop into a function, or returning an `Option`: still possible today. Labels do not get in the way when added.
 
-## 影響
+## Impact
 
-- 字句: `@` が新しい記号(`TK_AT`)になる。今は「`@` は使わない」というエラー
-- 構文: 文の先頭の `名前@ ループ` と、`break` `continue` の後ろの `@名前`
-- コード生成: ループ表に名前を持たせ、ジャンプ先をそこから選ぶ
-- `zevfmt`: `@` の前後に空白を入れない。ラベル付きループの本体は普通に整形される
-- 既存のプログラムは変わらない(`@` を使っているものはなかった)
+- Lexer: `@` becomes a new symbol (`TK_AT`). Today it is an error ("`@` is not used").
+- Syntax: `name@ loop` at the start of a statement, and `@name` after `break` and `continue`.
+- Code generation: the loop table keeps the names, and the jump target is chosen from it.
+- `zevfmt`: no space before or after `@`. The body of a labeled loop is formatted as usual.
+- Existing programs do not change (none used `@`).
 
-## テスト
+## Tests
 
-- ゴールデンテスト: 二重・三重ループの `break@` `continue@`、`while` `loop` `for`、`defer` との組み合わせ
-- エラーのテスト: 未定義のラベル、ループでない文へのラベル、ラベルの重複、ラムダ越し、空白あり
-- `zevfmt` の冪等性とAST不変
+- Golden tests: `break@` and `continue@` in double and triple loops, in `while`, `loop` and `for`, and together with `defer`.
+- Error tests: an undefined label, a label on a statement that is not a loop, a duplicate label, a label across a lambda, and a space after `break`.
+- `zevfmt` is idempotent and keeps the AST unchanged.

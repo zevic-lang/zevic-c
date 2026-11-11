@@ -1,16 +1,16 @@
-# 提案 0002: 非同期 `async { }` と `await`、`Zevic.Async`
+# Proposal 0002: asynchronous `async { }` and `await`, and `Zevic.Async`
 
-- 状態: 採用(2026-11-03、実装は同日。型名は `Async.Task<T>` のように `Async.` を付けて書く)
-- 日付: 2026-11-03
+- Status: accepted (2026-11-03, implemented the same day; type names are written with the `Async.` prefix, as in `Async.Task<T>`)
+- Date: 2026-11-03
 
-## 動機
+## Motivation
 
-HTTP(提案 0003)や`Process`のように、待ち時間の長い処理を並べて走らせたい。
-今は1本のスレッドで順に待つしかない。
+Work with long waits, such as HTTP (proposal 0003) and `Process`, should be able to run side by side.
+Today a single thread has to wait for each one in turn.
 
-## 提案
+## Proposal
 
-### 言語: 2つのキーワード
+### Language: two keywords
 
 ```
 let a: Task<I32> = async { slowSquare(3) }
@@ -18,25 +18,25 @@ let b: Task<I32> = async { slowSquare(4) }
 let total: I32 = await a + await b
 ```
 
-- `async { ... }` は式で、型は `Task<T>`(`T` はブロックの値の型)。ブロックはすぐに別のスレッドで走り始める
-- `await e` は前置の演算子(`!` と同じ強さ)。`e` は `Task<T>` で、終わるまで待って `T` を返す。`e.Await()` と同じ
-- どちらも**糖衣**で、`async { b }` は `Async.Spawn(() => { b })`、`await e` は `e.Await()` に展開される。関数に`async`を付ける色分けは入れない。非同期の関数は、`Task<T>`を返す普通の関数にする
-- `async` と `await` は予約語になる。既存のコードでこの名前を使っているものは、バッククォートで書く
-- ブロックの中の `return` `break` `?` は、ラムダと同じで、ブロックを抜けるだけ
+- `async { ... }` is an expression of type `Task<T>` (`T` is the type of the value of the block). The block starts running on another thread at once.
+- `await e` is a prefix operator (as strong as `!`). `e` is a `Task<T>`; it waits until the task is done and returns the `T`. It is the same as `e.Await()`.
+- Both are **sugar**: `async { b }` expands to `Async.Spawn(() => { b })` and `await e` to `e.Await()`. There is no coloring of functions with `async`. An asynchronous function is an ordinary function that returns a `Task<T>`.
+- `async` and `await` become reserved words. Existing code that uses these names has to write them in backquotes.
+- `return`, `break` and `?` inside the block only leave the block, as in a lambda.
 
-### 標準ライブラリ: `Zevic.Async`
+### Standard library: `Zevic.Async`
 
 ```
 class Task<T> {
-    fn Await() -> T              // 2回呼んでも同じ値が返る
+    fn Await() -> T              // calling it twice returns the same value
     fn IsDone() -> Bool
 }
 fn Spawn<T>(f: fn() -> T) -> Task<T>
 
 class Channel<T> {
-    fn Init(capacity: I64)       // 0以下は無制限
-    mut fn Send(v: T)            // いっぱいなら待つ。閉じた後はPanic
-    mut fn Recv() -> Option<T>   // 空なら待つ。閉じて空ならNone
+    fn Init(capacity: I64)       // 0 or less means unbounded
+    mut fn Send(v: T)            // waits when full; Panic after it is closed
+    mut fn Recv() -> Option<T>   // waits when empty; None when closed and empty
     mut fn Close()
 }
 
@@ -47,28 +47,28 @@ class Mutex {
 }
 ```
 
-### 実行の仕組み
+### How it runs
 
-- `Task` は OS のスレッド(POSIX のpthread)1本。Boehm GC をスレッド対応でビルドし、実行時の `GC_pthread_create` で登録する
-- スレッド間で渡せるものに型の制限はない(参照を共有する)。データ競合を避けるのは書く人の責任で、そのための道具が `Channel` と `Mutex`。ただし1つだけ、コンパイラが守る:**`async` ブロックの中から、外側の関数の `mut` の局所変数(クラス以外の値)を使えない**(エラー)。`count += 1` のような事故が一番多いから。クラスの値は参照として共有できる(`Channel` や `Mutex` を持つクラスのため)
-- `Task` の中で`Panic`が起きたら、今までと同じようにプログラム全体が止まる(そのスレッドだけを止める仕組みは、今は入れない)
-- `main` が終わったら、走っているスレッドを待たずにプログラムは終わる
+- A `Task` is one OS thread (a POSIX pthread). The Boehm GC is built with thread support, and threads are registered at run time with `GC_pthread_create`.
+- There is no type restriction on what can be passed between threads (references are shared). Avoiding data races is up to the programmer, and `Channel` and `Mutex` are the tools for that. The compiler enforces one rule: **an `async` block cannot use a `mut` local variable of the enclosing function (a non-class value)** (an error), because accidents like `count += 1` are the most common. Class values can be shared as references (for classes that hold a `Channel` or a `Mutex`).
+- A `Panic` inside a `Task` stops the whole program, as before (there is no mechanism to stop only that thread for now).
+- When `main` ends, the program ends without waiting for running threads.
 
-## 他の案
+## Alternatives
 
-- 状態機械への変換(Rust/Kotlin風の`async fn`): 1パスのコード生成には大きすぎる。関数の色分けも持ち込む
-- 1本のスレッドの上のコルーチン: Boehm GC が別のスタックを走査できない。将来、GC を差し替えるときに再検討する
-- `Spawn` だけで構文は足さない: それでも動くが、`async {}` と `await` は短く読みやすいので足す
+- Transforming into a state machine (Rust / Kotlin style `async fn`): too large for single-pass code generation, and it brings function coloring.
+- Coroutines on one thread: the Boehm GC cannot scan other stacks. To be reconsidered when the GC is replaced.
+- Only `Spawn`, with no new syntax: that would work, but `async {}` and `await` are short and readable, so they are added.
 
-## 影響
+## Impact
 
-- 字句: 予約語 `async` `await`。構文: 前置 `await`、式としての `async` ブロック
-- ランタイム: スレッド対応の GC、スレッドと mutex と条件変数の薄い C 関数。リンクに `-lpthread`(必要な環境のみ)
-- 標準ライブラリ: `Zevic.Async` を足す
-- `zevfmt`: `await` は後ろに空白、`async {` も同様
-- Windows のスレッドは未検証(CI を回してから確かめる)
+- Lexer: the reserved words `async` and `await`. Syntax: a prefix `await` and the `async` block as an expression.
+- Runtime: a thread-aware GC, and thin C functions for threads, mutexes and condition variables. `-lpthread` is linked (only where needed).
+- Standard library: `Zevic.Async` is added.
+- `zevfmt`: a space after `await`, and the same for `async {`.
+- Threads on Windows are unverified (to be checked after running CI).
 
-## テスト
+## Tests
 
-- ゴールデン: 2つの`async`を並べて結果を足す、`Channel`で生産者と消費者、`Mutex`で数えたカウンタ、`mut`の局所変数を使うとエラー
-- 速さの確認: 100ミリ秒の`Sleep`を10個並べた全体が、1秒でなく数百ミリ秒で終わる
+- Golden: two `async` blocks side by side whose results are added, a producer and a consumer with a `Channel`, a counter protected by a `Mutex`, and the error for using a `mut` local variable.
+- A speed check: ten 100 ms `Sleep`s side by side finish in a few hundred milliseconds in total, not in one second.

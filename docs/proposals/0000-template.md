@@ -1,24 +1,24 @@
-# 提案 NNNN: タイトル
+# Proposal NNNN: Title
 
-- 状態: 提案中 / 採用 / 却下
-- 日付: YYYY-MM-DD
+- Status: proposed / accepted / rejected
+- Date: YYYY-MM-DD
 
-## 動機
+## Motivation
 
-何に困っているか。今の書き方ではどうなるか。
+What is hard today, and what does the code look like now?
 
-## 提案
+## Proposal
 
-構文と意味。例を付ける。
+The syntax and the meaning, with examples.
 
-## 他の案
+## Alternatives
 
-検討して選ばなかったもの。その理由。
+What was considered and not chosen, and why.
 
-## 影響
+## Impact
 
-字句・構文・型・コード生成・標準ライブラリ・ツール(`zevfmt`など)・既存コードへの影響。
+Effects on the lexer, syntax, types, code generation, the standard library, tools (such as `zevfmt`) and existing code.
 
-## テスト
+## Tests
 
-どう確かめるか。
+How the change will be checked.

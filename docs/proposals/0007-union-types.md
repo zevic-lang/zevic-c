@@ -1,15 +1,15 @@
-# 提案 0007: ユニオン型(`A | B`)
+# Proposal 0007: union types (`A | B`)
 
-- 状態: 採用(2026-11-06、実装は同日)
-- 日付: 2026-11-06
+- Status: accepted (2026-11-06, implemented the same day)
+- Date: 2026-11-06
 
-## 動機
+## Motivation
 
-失敗しうる関数は`Result<T, Error>`と`?`で書ける。しかし、「`I32`か`ParseError`」のように、その場限りの2〜3種類の値を返したいとき、`enum`を宣言するのは重い。KotlinやTypeScriptのように、名前のないユニオン型があると、エラーの種類を型に載せたまま軽く書ける。
+A function that can fail is written with `Result<T, Error>` and `?`. But when you want to return one of two or three ad hoc kinds of value, such as "an `I32` or a `ParseError`", declaring an `enum` is heavy. With nameless union types, as in Kotlin or TypeScript, you can write the kinds of errors lightly and keep them in the type.
 
-## 提案
+## Proposal
 
-KotlinのUnion風(`A | B`、`is`、スマートキャスト、`when`風の`match`)。
+Union types in the style of Kotlin / TypeScript (`A | B`, `is`, smart casts, and a `match` like `when`).
 
 ```
 fn Parse(s: String) -> I32 | ParseError { ... }
@@ -22,33 +22,33 @@ match (r) {
 }
 ```
 
-- 型: `A | B | C`。入れ子と並びは正規化する(平坦化、重複の除去、名前順)。型は`Never`をメンバーにできない。2つ以上の異なる型が必要
-- 変換: メンバー→ユニオン、ユニオン→メンバーを含むより大きなユニオン、だけが暗黙。数値リテラルは、整数(小数)のメンバーが1つだけならその型
-- `x is T` `x !is T`: 優先順位は比較と同じ。`T`はメンバー
-- 絞り込み: `mut`でないローカル変数に限る。`if`の各枝、`&&` `||`の右側、`return` `break` `continue`で終わる`else`なしの`if`の後ろ
-- `match`のパターン: `名前: 型`、`_: 型`。網羅性を調べる
-- 分岐の値(`if` `match`)は、期待されるユニオンがあれば変換する
-- できないこと: `==`、`${}`、`<`など(絞り込んでから使う)
+- Types: `A | B | C`. Nesting and order are normalized (flattened, duplicates removed, sorted by name). `Never` cannot be a member. At least two different types are needed.
+- Conversions: only member to union, and union to a larger union that contains its members, are implicit. A numeric literal takes the type of the integer (decimal) member if there is exactly one.
+- `x is T` and `x !is T`: the precedence is the same as comparison. `T` is a member.
+- Narrowing: only for local variables that are not `mut`. In each branch of an `if`, on the right of `&&` and `||`, and after an `if` without `else` that ends in `return`, `break` or `continue`.
+- `match` patterns: `name: Type` and `_: Type`. Exhaustiveness is checked.
+- The value of a branch (`if`, `match`) is converted when a union is expected.
+- Not possible: `==`, `${}`, `<` and so on (narrow first, then use them).
 
-## 実装
+## Implementation
 
-- 型: `T_UNION`。メンバーを名前順に持ち、`enum`と同じ配置(`{ i32, [N x i64] }`)。メンバーごとに1つのバリアント(ペイロードはメンバーの値)。同じメンバー集合は同じ`Type`(intern)
-- 構文: `parse_type`が`|`でつなぐ(`*A | B`は`(*A) | B`。`fn(A) -> B | C`は、`B | C`を返す関数。関数型をメンバーにするときは括弧で囲む: `(fn(A) -> B) | C`)。`N_IS`、パターンの`P_TYPE`(`match`のアームの中だけ)
-- 生成: メンバー→ユニオンはタグとペイロードを書く。ユニオン→ユニオンは、タグを対応表で付け替えてペイロードの語をコピーする。絞り込みは、同じ名前の新しいローカル変数をスコープに作る(ラムダに取り込まれても、絞り込んだ型のまま)
-- 網羅性: `enum`のバリアントと同じ扱い(メンバーごとに行を絞る)
+- Type: `T_UNION`. It holds the members sorted by name and has the same layout as an `enum` (`{ i32, [N x i64] }`). One variant per member (the payload is the member's value). The same set of members gives the same `Type` (interned).
+- Syntax: `parse_type` joins types with `|` (`*A | B` is `(*A) | B`; `fn(A) -> B | C` is a function returning `B | C`; to make a function type a member, put it in parentheses: `(fn(A) -> B) | C`). `N_IS`, and `P_TYPE` for patterns (only inside `match` arms).
+- Code generation: member to union writes the tag and the payload. Union to union remaps the tag with a table and copies the payload words. Narrowing creates a new local variable of the same name in the scope (it keeps the narrowed type even when a lambda captures it).
+- Exhaustiveness: handled like the variants of an `enum` (the rows are narrowed per member).
 
-## 代替案
+## Alternatives
 
-- 関数型言語の`Either`風の標準`enum`: 名前を付けて使えば足りるが、軽さが目的なので採らない
-- `T?`(Option)の糖衣: `Option`と役割が重なるので、今回は入れない
-- 推論されるユニオン(`if`の枝が違う型ならユニオン): 型が見えにくくなるので、期待される型があるときだけ変換する
+- A standard `enum` in the style of functional languages' `Either`: it would be enough if used with names, but lightness is the aim, so it is not adopted.
+- Sugar for `T?` (Option): its role overlaps with `Option`, so it is not added now.
+- Inferred unions (a union when the branches of an `if` have different types): the types would be hard to see, so a conversion happens only when a type is expected.
 
-## 互換性
+## Compatibility
 
-`|`は型の位置では新しい。値の位置の`|`(ビット演算)とパターンの`|`は変わらない。`is`は、オペランドの後ろだけで特別な語(それ以外では識別子として使える)。
+`|` is new in type position. `|` in value position (a bit operation) and `|` in patterns do not change. `is` is a special word only after an operand (it can still be used as an identifier elsewhere).
 
-## 未解決
+## Open questions
 
-- `T?`の糖衣、`Error`との`?`の連携(`I32 | Error`を`?`で伝える)は、今後の検討
-- `mut`変数とフィールドの絞り込み
-- ユニオン型の`==`と`ToString`(メンバーが対応していれば自動で作る)
+- Sugar for `T?`, and cooperation with `Error` in `?` (propagating `I32 | Error` with `?`): for later.
+- Narrowing of `mut` variables and fields.
+- `==` and `ToString` for union types (generated automatically if the members support them).

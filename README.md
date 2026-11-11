@@ -1,25 +1,25 @@
 # zevic-c
 
-Zevic 言語の **C 実装**(`zevic0`)です。Zevic 自身で書かれたセルフホスト版コンパイラは [zevic-lang/zevic](https://github.com/zevic-lang/zevic) にあります(`zevic-lang/zevic` は `bootstrap/zevic.ll` と clang だけでビルドでき、このリポジトリは要りません)。
+The **C implementation** (`zevic0`) of the Zevic language. The self-hosted compiler, written in Zevic itself, is in [zevic-lang/zevic](https://github.com/zevic-lang/zevic) (`zevic-lang/zevic` builds from `bootstrap/zevic.ll` and clang alone, and does not need this repository).
 
-このリポジトリは v0.4.1 時点で分離した C 版で、次の用途のために残してあります。
+This repository is the C version split off at v0.4.1. It is kept for these purposes:
 
-- 最初のコンパイラとして、Zevic のコンパイラを一から作り直す(新しい OS や CPU への持ち込みなど)
-- セルフホスト版と出力を突き合わせる参照実装
-- 標準ライブラリ(`packages/Zevic`)・ランタイム(`runtime/`)・テストのコピー。本体との同期は手作業です
+- As the first compiler, to rebuild the Zevic compiler from scratch (for example when bringing it to a new OS or CPU)
+- As a reference implementation whose output can be compared with the self-hosted version
+- A copy of the standard library (`packages/Zevic`), the runtime (`runtime/`) and the tests. Keeping it in sync with the main repository is done by hand.
 
-以降の説明は分離時点のものです。
+The description below is as of the split.
 
 ---
 
 # Zevic
 
-Zevicは、Cの資産をそのまま使える、小さくて書きやすいネイティブ言語です。
-ソースを **テキストの LLVM IR** に変換し、`clang` で機械語にします。
+Zevic is a small, easy-to-write native language that can use C code as it is.
+It turns source code into **textual LLVM IR** and lets `clang` produce the machine code.
 
-- 言語仕様: [`docs/spec/zevic-spec.md`](docs/spec/zevic-spec.md)
-- 実装計画: [`docs/plan.md`](docs/plan.md)
-- 最初のコンパイラ `zevic0` は C(C11)で書かれています(`zevic0/`)
+- Language specification: [`docs/spec/zevic-spec.md`](docs/spec/zevic-spec.md)
+- Implementation plan: [`docs/plan.md`](docs/plan.md)
+- The first compiler, `zevic0`, is written in C (C11) (`zevic0/`)
 
 ```
 module Main
@@ -31,78 +31,75 @@ fn Main() {
 }
 ```
 
-## ビルド
+## Building
 
-必要なもの: C コンパイラ、`make`、そして **clang 15 以上**(`zevic` が生成した LLVM IR をビルドするために使います)。
+You need a C compiler, `make` and **clang 15 or newer** (used to build the LLVM IR that `zevic` generates).
 
-### LLVM(clang)のインストール
+### Installing LLVM (clang)
 
-| OS | コマンド |
+| OS | Command |
 | --- | --- |
 | Ubuntu / Debian | `sudo apt install clang` |
-| Windows | `winget install LLVM.LLVM`(MSVC のライブラリが必要なので Visual Studio Build Tools も入れてください) |
+| Windows | `winget install LLVM.LLVM` (the MSVC libraries are needed too, so install the Visual Studio Build Tools as well) |
 | macOS | `brew install llvm` |
 
-`zevic` は次の順で clang を探します: `--cc` → 環境変数 `ZEVIC_CLANG` → `PATH` 上の `clang` →
-よくあるインストール先(`C:\Program Files\LLVM\bin`、Homebrew、`/usr/lib/llvm-*/bin`)。
-見つからないとき、または古いときは、上のインストール方法を表示して終了します。
-
+`zevic` looks for clang in this order: `--cc`, the `ZEVIC_CLANG` environment variable, `clang` on `PATH`, and then the usual install locations (`C:\Program Files\LLVM\bin`, Homebrew, `/usr/lib/llvm-*/bin`).
+If clang is missing or too old, it prints the installation instructions above and exits.
 
 ```sh
-make            # build/zevic と build/zevpm を作る(`make zevfmt` で整形ツール)
-make test       # ゴールデンテスト、zevpm のテスト、examples を実行
+make            # builds build/zevic and build/zevpm (`make zevfmt` for the formatter)
+make test       # runs the golden tests, the zevpm tests and the examples
 ./build/zevic examples/01_hello.zev -o hello && ./hello
 ```
 
-## 使い方
+## Usage
 
 ```sh
-zevic hello.zev -o hello                # ビルド
-zevic hello.zev native/a.c -o hello     # C のファイルも一緒に(.c .cpp .o .a)
-zevic app.zev -Iinc -DDEBUG -L. -lfoo   # -I -D -L -l はそのままコンパイラ/リンカへ
-zevic app.zev --emit-header zevic.h     # export "C" した関数の C ヘッダも書き出す
-zevic hello.zev --emit-ll -o hello.ll   # LLVM IR だけ出す
+zevic hello.zev -o hello                # build
+zevic hello.zev native/a.c -o hello     # build C files together (.c .cpp .o .a)
+zevic app.zev -Iinc -DDEBUG -L. -lfoo   # -I -D -L -l go straight to the compiler / linker
+zevic app.zev --emit-header zevic.h     # also write a C header for the export "C" functions
+zevic hello.zev --emit-ll -o hello.ll   # emit only the LLVM IR
 zevic --version
 ```
 
-標準ライブラリ(`Zevic` パッケージ、`packages/Zevic/`)とランタイム(`runtime/`)は、実行ファイルの隣の `share/zevic/` か、
-環境変数 `ZEVIC_HOME` が指す場所から探します。リポジトリ直下で実行するときは追加の設定は不要です。
+The standard library (the `Zevic` package, `packages/Zevic/`) and the runtime (`runtime/`) are looked up in `share/zevic/` next to the executable,
+or where the `ZEVIC_HOME` environment variable points. No extra setup is needed when you run from the repository root.
 
-## zevpm(パッケージとビルド)
+## zevpm (packages and builds)
 
 ```sh
-zevpm new myapp          # myapp/ に zevic.toml と src/Main.zev ができる(--lib でライブラリ)
+zevpm new myapp          # creates myapp/ with zevic.toml and src/Main.zev (--lib for a library)
 cd myapp
-zevpm run                # ビルドして実行(引数は zevpm run -- a b)
-zevpm test               # test ブロックと _test.zev を実行(zevpm test 名前 で絞り込み)
-zevpm get owner/name@v1.0.0   # git の依存を足す(zevic.lock に commit を記録、~/.zevpm にキャッシュ)
-zevpm build --release    # build/ に出力(ライブラリは .a と include/<Name>.h)
+zevpm run                # build and run (arguments: zevpm run -- a b)
+zevpm test               # run the test blocks and _test.zev files (zevpm test name to filter)
+zevpm get owner/name@v1.0.0   # add a git dependency (the commit goes in zevic.lock, cached in ~/.zevpm)
+zevpm build --release    # output goes to build/ (a library gives a .a and include/<Name>.h)
 ```
 
-`zevpm` は `zevic` を呼ぶので、同じディレクトリ(または `PATH`、環境変数 `ZEVIC`)に置いてください。git の依存には `git` が必要です。
+`zevpm` calls `zevic`, so put it in the same directory (or on `PATH`, or point the `ZEVIC` environment variable at the compiler). Git dependencies need `git`.
 
-## ランタイムとGC
+## The runtime and the GC
 
-ランタイムと Boehm GC(`runtime/third_party/bgc`)は C で書かれています。最初のビルドで一度だけコンパイルし、
-`~/.cache/zevic`(Windows は `%LOCALAPPDATA%\zevic\cache`、`ZEVIC_CACHE` で変更可)に置いて使い回します。
+The runtime and the Boehm GC (`runtime/third_party/bgc`) are written in C. They are compiled once, by the first build, and reused from
+`~/.cache/zevic` (`%LOCALAPPDATA%\zevic\cache` on Windows; change it with `ZEVIC_CACHE`).
 
-## リリース
+## Releases
 
-`main` への push でビルドが成功するたびに、Linux / macOS / Windows の実行ファイルを
-`.github/workflows/ci.yml` が GitHub Releases に公開します。
+Every time a build of `main` succeeds, `.github/workflows/ci.yml` publishes the Linux, macOS and Windows executables to GitHub Releases.
 
-## 例
+## Examples
 
-- [`examples/`](examples/) — Hello、FizzBuzz、階乗、電卓、`interface`、C との連携(`06_c_interop/`)、他言語との連携(`interop/`)、ファイル、外部プログラム、統計、コレクション(`07`〜`10`)、`async`(`11`)、HTTP(`12`)、`zevpm` パッケージ(`apps/wordcount/`)
+- [`examples/`](examples/): Hello, FizzBuzz, factorial, a calculator, `interface`, working with C (`06_c_interop/`), working with other languages (`interop/`), files, external programs, statistics, collections (`07` to `10`), `async` (`11`), HTTP (`12`) and a `zevpm` package (`apps/wordcount/`).
 
-## 状態
+## Status
 
-v0.4.1: 型、`struct`/`class`/`enum`、ユニオン型(`A | B`、`is`、型パターン)、`interface`、ジェネリクス、クロージャ、`defer`、GC、C との連携、
-`test` ブロック、ループのラベル(`break@名前`)、`async`/`await`、HTTP(`Zevic.Http`、TLSなし)、`zevpm`、標準ライブラリ(`Fs` `Env` `Text` `Math` `Time` `Process` `Random` `Json` `Path` `DateTime` `Regex` `Csv` `Toml` `Net` `Zip` `Gzip` など)まで動きます。
-`zevfmt`(整形: `zevfmt -w .`、検査: `zevfmt -check .`)も動きます。計画は [`docs/plan.md`](docs/plan.md)。
+v0.4.1: types, `struct` / `class` / `enum`, union types (`A | B`, `is`, type patterns), `interface`, generics, closures, `defer`, the GC, working with C,
+`test` blocks, loop labels (`break@name`), `async` / `await`, HTTP (`Zevic.Http`, no TLS), `zevpm` and the standard library (`Fs` `Env` `Text` `Math` `Time` `Process` `Random` `Json` `Path` `DateTime` `Regex` `Csv` `Toml` `Net` `Zip` `Gzip` and more) all work.
+`zevfmt` (format with `zevfmt -w .`, check with `zevfmt -check .`) works too. The plan is in [`docs/plan.md`](docs/plan.md).
 
-仕様書は草案です。実装の進み具合は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
+See [`CHANGELOG.md`](CHANGELOG.md) for how far the implementation has come.
 
-## ライセンス
+## License
 
-Apache-2.0(`LICENSE`)。
+Apache-2.0 (`LICENSE`).

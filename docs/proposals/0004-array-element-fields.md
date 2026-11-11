@@ -1,38 +1,38 @@
-# 提案 0004: 配列の要素のフィールドへの代入(`xs[i].F = v`)
+# Proposal 0004: assigning to a field of an array element (`xs[i].F = v`)
 
-- 状態: 採用(2026-11-03、実装は同日)
-- 日付: 2026-11-03
+- Status: accepted (2026-11-03, implemented the same day)
+- Date: 2026-11-03
 
-## 動機
+## Motivation
 
-`xs[i].Count += 1` のような書き方が、今はエラーになる。`class`の要素なら、`mut`の局所変数に取り出してから変更するしかなく、
-`struct`の要素に至っては、要素を丸ごと作り直して`xs[i] = ...`と書くしかない。表やグリッドを扱うコードで、よく出てくる形。
+Code such as `xs[i].Count += 1` is an error today. For a `class` element you have to take it out into a `mut` local variable and change that,
+and for a `struct` element you have to rebuild the whole element and write `xs[i] = ...`. This shape comes up often in code that handles tables and grids.
 
 ```
-mut t: Tok = toks[i]       // 今の回避策
+mut t: Tok = toks[i]       // today's workaround
 t.Skip = true
 ```
 
-## 提案
+## Proposal
 
-`xs[i].F = v`、`xs[i].F += v`、`xs[i].A.B = v`、`xs[i][j].F = v` を書けるようにする。
+Allow `xs[i].F = v`, `xs[i].F += v`, `xs[i].A.B = v` and `xs[i][j].F = v`.
 
-- 配列(`xs`)が`mut`の変数・引数・`mut fn`の中の`this`のフィールドであるときだけ許す。`let`の配列は、これまでどおりエラー("cannot assign to field ... because `xs` is not `mut`")
-- 要素が`class`なら、参照を通して、その場のオブジェクトを変更する
-- 要素が`struct`なら値なので、コピーを取り出して変更し、`SetIndex`で配列に書き戻す。他の場所にある同じ値のコピーは変わらない
-- 書き戻しがあるため、`struct`の要素では、配列と添字を**単純な式**(変数、フィールド、数)に限る。`ps[Next()].X = 5`は、添字を2回評価してしまうのでエラー("needs a simple array and index")。`class`の要素は、評価が1回なので制限なし
+- Allowed only when the array (`xs`) is a `mut` variable or parameter, or a field of `this` inside a `mut fn`. A `let` array is still an error as before ("cannot assign to field ... because `xs` is not `mut`").
+- If the element is a `class`, the object in place is changed through the reference.
+- If the element is a `struct`, it is a value: a copy is taken out, changed, and written back to the array with `SetIndex`. Copies of the same value elsewhere do not change.
+- Because of the write back, for `struct` elements the array and the index are limited to **simple expressions** (a variable, a field, a number). `ps[Next()].X = 5` is an error ("needs a simple array and index"), because the index would be evaluated twice. `class` elements have no such limit, since they are evaluated once.
 
-## 他の案
+## Alternatives
 
-- `class`だけ許す: `struct`だけ書けないのは、規則として分かりにくい
-- 添字を変数に取り出す関数式を自動で作る: コンパイラが隠れた変数を増やすことになる。単純な式に限るほうが、規則として短い
+- Allowing only `class`: a rule that excludes only `struct` is hard to understand.
+- Generating a function expression that moves the index into a variable: the compiler would add hidden variables. Limiting to simple expressions gives a shorter rule.
 
-## 影響
+## Impact
 
-- コンパイラの代入の処理だけ。構文は変わらない。既存のコードは、そのまま動く
-- `zevfmt`への影響なし
+- Only the assignment handling of the compiler. The syntax does not change. Existing code works as it is.
+- No impact on `zevfmt`.
 
-## テスト
+## Tests
 
-- `class`と`struct`の要素、入れ子の`struct`、配列の配列、`mut fn`の中の`this`のフィールド、`+=`
-- `let`の配列、`mut`でない引数、複雑な添字は、エラー
+- `class` and `struct` elements, nested `struct`s, arrays of arrays, fields of `this` inside a `mut fn`, and `+=`.
+- A `let` array, a parameter that is not `mut`, and a complex index are errors.

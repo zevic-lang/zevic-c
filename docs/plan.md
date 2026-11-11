@@ -1,72 +1,72 @@
-# Zevic 実装プラン
+# Zevic implementation plan
 
-仕様書(「Zevic 言語仕様」)をもとに、**Hello World から、Zevic 自身で書いたコンパイラが自分をビルドできる(セルフホスティング)まで**を、順に実装する計画です。
+Based on the specification ("Zevic language specification"), this plan implements things in order, **from Hello World to a compiler written in Zevic that can build itself (self-hosting)**.
 
-- 名前は仮。公開前に確認する(→ フェーズ0)
-- 最初のコンパイラ `zevic0` は **C(C11)** で書く。出力は **テキストの LLVM IR**。ビルドと結合は **clang**
-- GC は最初はなし(`malloc`して放置)。段階⑤で Boehm GC に差し替える
-- 各段階は「動くものが増える」単位で区切る。段階が終わるまで、次の機能に手を付けない
+- The name is final (see phase 0).
+- The first compiler, `zevic0`, is written in **C (C11)**. Its output is **textual LLVM IR**. Building and linking are done by **clang**.
+- At first there is no GC (`malloc` and leave it). It is replaced by the Boehm GC in stage 5.
+- Each stage is a unit in which "more things work". Do not start on the next feature until the stage is finished.
 
 ---
 
-## 0. 全体の流れ
+## 0. Overall flow
 
-| フェーズ | 内容 | 完了の目安 | リリース |
+| Phase | Content | Done when | Release |
 | --- | --- | --- | --- |
-| 0 | 準備(名前、リポジトリ、環境) | リポジトリがあり、CIが緑 | |
-| 1 | 手書き LLVM IR の実験 | `.ll` から Hello World が動く | |
-| ① | Hello World | `zevic hello.zev -o hello` が動く | v0.0.1 |
-| ② | 計算と制御 | FizzBuzz、階乗が動く | v0.0.2 |
-| ③ | データと最小のジェネリクス | `struct` `enum` `match`、ジェネリクスの最小版、標準ライブラリの `Option` `Result` `Array` `String` | v0.0.3 |
-| ④ | クラスとC連携 | `class` `interface`、ジェネリクスの制約、標準ライブラリの `Map`、`extern` `export` | v0.1.0(公開) |
-| ⑤ | 抽象化 | クロージャ、`defer`、`params`、Boehm GC | v0.2.0 |
-| ⑥ | ツール | `zevpm`、`test`、`zevic.toml`、標準ライブラリ第2段(`Process` を含む) | v0.3.0 |
-| ⑦ | セルフホスティング | Zevic製コンパイラ、`zevfmt`、ブートストラップ | v0.4.0 |
-| 仕上げ | 1.0 に向けた整備 | 仕様の凍結、ドキュメント、配布 | v1.0.0 |
+| Phase 0 | Preparation (name, repositories, environment) | the repositories exist and CI is green | |
+| Phase 1 | Experiments with hand-written LLVM IR | Hello World runs from a `.ll` | |
+| Stage 1 | Hello World | `zevic hello.zev -o hello` works | v0.0.1 |
+| Stage 2 | Computation and control | FizzBuzz and factorial work | v0.0.2 |
+| Stage 3 | Data and minimal generics | `struct`, `enum`, `match`, minimal generics, the standard library's `Option`, `Result`, `Array` and `String` | v0.0.3 |
+| Stage 4 | Classes and C interop | `class`, `interface`, generic constraints, the standard library's `Map`, `extern` and `export` | v0.1.0 (public) |
+| Stage 5 | Abstractions | closures, `defer`, `params`, the Boehm GC | v0.2.0 |
+| Stage 6 | Tools | `zevpm`, `test`, `zevic.toml`, the second batch of the standard library (including `Process`) | v0.3.0 |
+| Stage 7 | Self-hosting | the compiler written in Zevic, `zevfmt`, bootstrapping | v0.4.0 |
+| Polish | Preparing for 1.0 | freeze the specification, documentation, distribution | v1.0.0 |
 
-**進め方の原則**
+**Working principles**
 
-1. 各段階の最初に、その段階で通すべき**サンプルとテスト**を先に書く(`examples/` と `tests/`)
-2. 仕様と実装が食い違ったら、**先に仕様書を直す**。実装が先に進まない
-3. 各段階の終わりに、タグを打ち、`CHANGELOG.md` に1行書く
-4. 「速さ」と「エラーメッセージの親切さ」は、段階⑥までは後回しにする。**正しく動くこと**が先
-
----
-
-## フェーズ0: 準備
-
-### 0-1. 名前
-
-- [x] 言語名は「Zevic」で確定(GitHub の Org は `zevic-lang`)
-
-### 0-2. リポジトリ
-
-- [ ] GitHub Organization(非公開)を作る
-- [ ] `.github`、`docs`、`zevic`、`examples` の4つを作る
-- [ ] `docs` に仕様書(`spec/zevic-spec.md`)と、`proposals/0000-template.md` を置く
-- [ ] `examples` に、サンプル01〜10を置く(草案と明記)
-- [ ] `LICENSE`(Apache-2.0)、`README.md` を置く
-
-### 0-3. 開発環境
-
-- [ ] clang 15 以上を入れる(`clang --version`)。Windows は Visual Studio Build Tools も
-- [ ] `make`、`git`、C コンパイラ(clang 15 以上)を入れる
-- [ ] まず1つの OS に絞る(いちばん慣れているもの)。他の OS は段階⑥で CI に足す
-- [ ] Boehm GC のソースを取得し、ライセンスを確認する(同梱するのは段階⑤)
-
-### 0-4. 最初の CI
-
-- [ ] GitHub Actions で、Linux のビルドとテストが通る小さな CI を作る(まだ中身はほぼ空でよい)
-
-**完了**: 非公開リポジトリが4つあり、CI が緑。名前は確定している。
+1. At the start of each stage, first write the **samples and tests** that the stage has to pass (`examples/` and `tests/`).
+2. When the specification and the implementation disagree, **fix the specification first**. The implementation does not get ahead.
+3. At the end of each stage, tag it and add one line to `CHANGELOG.md`.
+4. Leave "speed" and "helpful error messages" for after stage 6. **Working correctly** comes first.
 
 ---
 
-## フェーズ1: 手書き LLVM IR の実験
+## Phase 0: Preparation
 
-コンパイラを書く前に、**コンパイラが出力すべき形**を手で書いて確かめる。これが以後の設計の見本になる。
+### 0-1. Name
 
-### 1-1. 最小の `.ll`
+- [x] The name of the language is "Zevic" (the GitHub organization is `zevic-lang`)
+
+### 0-2. Repositories
+
+- [ ] Create a GitHub organization (private)
+- [ ] Create the four repositories `.github`, `docs`, `zevic` and `examples`
+- [ ] Put the specification (`spec/zevic-spec.md`) and `proposals/0000-template.md` in `docs`
+- [ ] Put samples 01 to 10 in `examples` (marked as drafts)
+- [ ] Add `LICENSE` (Apache-2.0) and `README.md`
+
+### 0-3. Development environment
+
+- [ ] Install clang 15 or newer (`clang --version`). On Windows, the Visual Studio Build Tools too.
+- [ ] Install `make`, `git` and a C compiler (clang 15 or newer)
+- [ ] Concentrate on one OS first (the one you know best). Other OSes are added to CI in stage 6.
+- [ ] Get the Boehm GC sources and check the license (it is bundled in stage 5)
+
+### 0-4. The first CI
+
+- [ ] Make a small CI on GitHub Actions in which the Linux build and tests pass (the content can be almost empty for now)
+
+**Done when**: there are four private repositories and CI is green. The name is final.
+
+---
+
+## Phase 1: Experiments with hand-written LLVM IR
+
+Before writing the compiler, write by hand the **shape the compiler should emit** and check it. This becomes the model for the design from then on.
+
+### 1-1. The smallest `.ll`
 
 ```
 ; hello.ll
@@ -78,32 +78,32 @@ define i32 @main() {
 }
 ```
 
-- [ ] `clang hello.ll -o hello` で動く(clang 15 以上、opaque pointer の `ptr`)
-- [ ] Windows でも動くか確認する(`.exe` とリンク)
+- [ ] It works with `clang hello.ll -o hello` (clang 15 or newer, opaque pointers, `ptr`)
+- [ ] Check that it works on Windows too (linking an `.exe`)
 
-### 1-2. ランタイムを C で書いて、`.ll` から呼ぶ
+### 1-2. Write the runtime in C and call it from `.ll`
 
-- [ ] `runtime/zevic_rt.c`: `zevic_alloc`、`zevic_panic`、`zevic_print_str`
-- [ ] `.ll` から `declare` して呼び、`clang a.ll zevic_rt.c -o a` で結合する
+- [ ] `runtime/zevic_rt.c`: `zevic_alloc`, `zevic_panic` and `zevic_print_str`
+- [ ] `declare` and call them from `.ll`, and link with `clang a.ll zevic_rt.c -o a`
 
-### 1-3. 型の表現を試す
+### 1-3. Try the representation of types
 
-仕様書の「生成コードの規則」の表を、手書きで確かめる。
+Check the table "Rules for generated code" in the specification by hand.
 
-- [ ] `String` = `{ ptr, i64 }`(末尾に NUL)
-- [ ] `I32` の足し算とオーバーフロー検査(`llvm.sadd.with.overflow.i32`)→ 起きたら `zevic_panic`
-- [ ] `struct` = LLVM の構造体。`class` = GC ヒープ上の構造体への `ptr`
-- [ ] `enum` = タグ + 最大のバリアントの領域
-- [ ] `interface` の値 = `{ ptr, ptr }`(オブジェクトと関数表)
-- [ ] 関数値(クロージャ) = `{ ptr 関数, ptr 環境 }`
+- [ ] `String` = `{ ptr, i64 }` (with a trailing NUL)
+- [ ] `I32` addition and the overflow check (`llvm.sadd.with.overflow.i32`), then `zevic_panic` if it happened
+- [ ] `struct` = an LLVM struct. `class` = a `ptr` to a struct on the GC heap
+- [ ] `enum` = a tag + the area of the largest variant
+- [ ] `interface` value = `{ ptr, ptr }` (the object and the function table)
+- [ ] Function value (closure) = `{ ptr function, ptr environment }`
 
-**成果物**: `docs/design/ir-notes.md`(上の確認結果)。**完了**: すべて手書きで動く。
+**Deliverable**: `docs/design/ir-notes.md` (the results of the checks above). **Done when**: everything works by hand.
 
 ---
 
-## 段階①: Hello World
+## Stage 1: Hello World
 
-**目標**: 次のプログラムをビルドして動かす。
+**Goal**: build and run the following program.
 
 ```
 module Main
@@ -115,324 +115,324 @@ fn Main() {
 }
 ```
 
-### やること
+### What to do
 
-| 部品 | 内容 |
+| Part | Content |
 | --- | --- |
-| `lexer.c` | UTF-8、識別子、予約語、整数・文字列リテラル、コメント、改行の扱い |
-| `parser.c` | `module` `import` `fn`、呼び出し式、文字列リテラル。再帰下降パーサ |
-| `ast.c` | AST の定義とダンプ(`--dump-ast`) |
-| `resolve.c` | `module` / `import` の解決。`Zevic.` の省略を含む。標準ライブラリの探索 |
-| `check.c`(骨組み) | 型の表現、関数の宣言と呼び出しの検査 |
-| `emit_ll.c` | 関数、文字列定数、呼び出しを `.ll` に出す |
-| `driver.c` | `clang` を探して呼ぶ。`-o` `--emit-ll` |
-| `runtime/` | `zevic_alloc`(`malloc`)、`zevic_panic`、`Console.Print`/`Println` |
-| `main` の生成 | C の `main(int, char**)` を生成し、`Main` を呼んで終了コードを返す |
+| `lexer.c` | UTF-8, identifiers, reserved words, integer and string literals, comments, handling of newlines |
+| `parser.c` | `module`, `import`, `fn`, call expressions, string literals. A recursive descent parser |
+| `ast.c` | The AST definition and a dump (`--dump-ast`) |
+| `resolve.c` | Resolving `module` / `import`, including the omission of `Zevic.`. Searching the standard library |
+| `check.c` (skeleton) | The representation of types, checking function declarations and calls |
+| `emit_ll.c` | Emits functions, string constants and calls into `.ll` |
+| `driver.c` | Finds and calls `clang`. `-o` and `--emit-ll` |
+| `runtime/` | `zevic_alloc` (`malloc`), `zevic_panic`, `Console.Print` / `Println` |
+| Generating `main` | Generates C's `main(int, char**)`, which calls `Main` and returns the exit code |
 
-### エラーメッセージ
+### Error messages
 
-- ファイル名、行、列、問題の行、原因の一文。最初から入れる(後から足すより安い)
+- The file name, line and column, the offending line, and one sentence about the cause. Put them in from the start (cheaper than adding them later).
 
-### テスト
+### Tests
 
-- [ ] ゴールデンテスト: `tests/NN-name/input.zev` と `expected_output.txt` と `expected_exit_code`
-- [ ] `tests/run.py` が全テストを実行して、差分を表示する
-- [ ] 異常系: `module` が無い、`Main` が無い、複数ある、未定義の名前、構文エラー
+- [ ] Golden tests: `tests/NN-name/input.zev`, `expected_output.txt` and `expected_exit_code`
+- [ ] `tests/run.py` runs all the tests and shows the differences
+- [ ] Error cases: no `module`, no `Main`, several of them, an undefined name, a syntax error
 
-**完了**: `zevic hello.zev -o hello` が動く。CI(Linux)で通る。**v0.0.1**。
-
----
-
-## 段階②: 計算と制御
-
-**目標**: FizzBuzz、階乗、素数判定のような、数値と制御だけのプログラム。
-
-### 言語機能
-
-- [ ] 整数型 `I8`〜`I64` `U8`〜`U64`、`F32` `F64`、`Bool`、`Char`、`Unit`
-- [ ] リテラル(`1_000`、`0xFF`、`0b1010`、`1e3`、`255_U8`、文字、エスケープ)
-- [ ] `let` / `mut`、代入、`+=` など
-- [ ] 演算子と優先順位(仕様書の表どおり)、比較、論理、ビット演算
-- [ ] **オーバーフロー検査**(加減乗、シフト、キャスト)、0除算、`Panic`(終了コード101)
-- [ ] `if` / `else`(式)、`while`、`loop`、`break`、`continue`、`for (i in 0..n)`
-- [ ] 関数(引数、戻り値、`return`、再帰)
-- [ ] `Panic` `Assert`
-- [ ] 文字列補間 `"${x}"`(基本型だけ)、`Console.Printf`(型・個数のコンパイル時検査)
-- [ ] 型変換(`ToI64` `ToF64`、`Result` を返す狭い方向は段階③で)
-
-### 検査
-
-- [ ] 暗黙変換の禁止、型の不一致、`let` への再代入、未初期化、戻り値の型、到達不能
-- [ ] すべての分岐が値を返すか(式としての `if`)
-
-### 実装上の要点
-
-- 型検査と IR 生成を分ける(`check.c` が型付き AST を作り、`emit_ll.c` はそれだけを見る)
-- 中間表現は、型付き AST のまま使う。独自の IR は、必要になるまで作らない
-
-**完了**: FizzBuzz、階乗、素数のテストが通る。**v0.0.2**。
+**Done when**: `zevic hello.zev -o hello` works and passes in CI (Linux). **v0.0.1**.
 
 ---
 
-## 段階③: データ
+## Stage 2: Computation and control
 
-**目標**: データ構造を扱うプログラム(簡単な電卓、単語カウント前半)。
+**Goal**: programs with only numbers and control, such as FizzBuzz, factorial and primality tests.
 
-### 言語機能
+### Language features
 
-- [ ] **ジェネリクスの最小版**(型引数、推論、**単相化**。制約はまだない)。標準ライブラリの `Option` `Result` `Array` を書くために、この段階で入れる
-- [ ] タプル、タプルの分解 `let (a, b): ...`
-- [ ] `struct`(`Init` `New`、`this`、メソッド、`==`、値のコピー)
-- [ ] `enum`(3種のバリアント、メソッド)、`match`(網羅性検査、ガード、範囲、タプル・構造体パターン)
-- [ ] `Option` `Result`: **標準ライブラリの `enum`**(`Zevic.Core`)。`?`、`Context` `MapErr` `OkOr`、`Error` と `ErrorKind`
-- [ ] `String`: UTF-8 検証、`Len` `CharCount`、`+`、比較、`ToI32` など
-- [ ] `Array<T>`: **標準ライブラリの型**(`Zevic.Array`)。リテラル、添字、範囲外 Panic、`Push` `Pop` など主要メソッド
-- [ ] `for (x in arr)`、`for (i, x in arr)`
-- [ ] `mut fn` と `let` の深い不変性の検査(`let` の配列に `Push` できない)
-- [ ] 公開・非公開(大文字・小文字)の検査
+- [ ] Integer types `I8` to `I64` and `U8` to `U64`, `F32` and `F64`, `Bool`, `Char` and `Unit`
+- [ ] Literals (`1_000`, `0xFF`, `0b1010`, `1e3`, `255_U8`, characters, escapes)
+- [ ] `let` / `mut`, assignment, `+=` and so on
+- [ ] Operators and precedence (as in the table of the specification), comparison, logic, bit operations
+- [ ] **Overflow checks** (add, subtract, multiply, shifts, casts), division by zero, `Panic` (exit code 101)
+- [ ] `if` / `else` (an expression), `while`, `loop`, `break`, `continue`, `for (i in 0..n)`
+- [ ] Functions (parameters, return values, `return`, recursion)
+- [ ] `Panic` and `Assert`
+- [ ] String interpolation `"${x}"` (basic types only), `Console.Printf` (types and count checked at compile time)
+- [ ] Type conversions (`ToI64`, `ToF64`; the narrowing ones that return a `Result` come in stage 3)
 
-### 標準ライブラリの土台(最初から標準ライブラリに置く)
+### Checks
 
-`Array` と `Map` は、最初から**標準ライブラリの型**として書く(コンパイラの組み込みにしない)。ただし Zevic にはポインタの読み書きがないので、土台として、**標準ライブラリ専用のモジュール `Zevic.Intrinsics`** をコンパイラが提供する。
+- [ ] No implicit conversions, type mismatches, reassigning a `let`, uninitialized variables, the return type, unreachable code
+- [ ] Whether every branch returns a value (`if` as an expression)
 
-- [ ] `Intrinsics.Buf<T>`: 長さ固定の領域。`New(cap)` `Get(i)` `Set(i, v)` `Copy(from, to, n)` を、コンパイラが IR に直接展開する(一般の利用者は `import` できない)
-- [ ] `Zevic.Array<T>` は、`Buf<T>` を持つ普通の `class` として Zevic で書く(伸長は倍々、範囲検査は `Array` 側)
-- [ ] `String` は、非ジェネリックなので、ランタイムの C(`zevic_str_*`)を `extern "C"` で呼ぶ薄い型として書く
-- [ ] 組み込みとして特別扱いするのは、リテラル `[1, 2, 3]` の**構文**(`Array.New` と `Push` の呼び出しに展開)と、`for` の展開だけ
+### Implementation notes
 
-### 実装上の要点
+- Separate type checking from IR generation (`check.c` builds the typed AST, and `emit_ll.c` looks only at that).
+- Use the typed AST itself as the intermediate representation. Do not build a separate IR until it is needed.
 
-- `enum` の `match` は、決定木ではなく、**単純な `switch` + 順番の照合**でよい(最適化は後)
-- `Result` の `?` は、早期 `return` に展開する(`defer` が入る段階⑤で、展開の順序を再確認)
-
-**完了**: `examples/03`、`06` の一部と、`Array<T>` を使うサンプルが動く。**v0.0.3**。
+**Done when**: the FizzBuzz, factorial and prime tests pass. **v0.0.2**.
 
 ---
 
-## 段階④: クラスとC連携
+## Stage 3: Data
 
-**目標**: 外部の C ライブラリを呼ぶ、オブジェクト指向のプログラム。**ここで公開する(v0.1.0)**。
+**Goal**: programs that handle data structures (a simple calculator, the first half of a word count).
 
-### 言語機能
+### Language features
 
-- [ ] `class`(参照型、フィールドの初期値、`Init`、`New`、`static`)
-- [ ] `interface`(メソッド、デフォルト実装、実装の検査、動的ディスパッチの関数表)
-- [ ] 標準 `interface`: `Equatable` `Hashable` `Comparable` `Iterable` `Iterator`
-- [ ] `for` で自作の `Iterable` を回す
-- [ ] **ジェネリクスの制約**(`<K: Hashable>`、`+` でつなぐ)と、制約を満たすかの検査。組み込み型(整数、`String` など)には、`Hashable` `Equatable` `Comparable` をコンパイラが用意する
-- [ ] `Map<K, V>`: **標準ライブラリの型**(`Zevic.Map`)として Zevic で書く(ハッシュ表。挿入順を保つ。`Intrinsics.Buf` の上)。`Set<T>` も同じ
-- [ ] **C 連携**: `extern "C"`、`export "C"`、C型の表、変換メソッド、ポインタ、可変長引数 `...`、`extern struct`
-- [ ] `Handle<T>`、`NewString`、`Free`(`Zevic.C`)
-- [ ] `native/` と、`.c` `.cpp` `.o` `.a` などの結合(拡張子の表)
-- [ ] `export "C"` があるときの `zevic.h` の生成
+- [ ] **Minimal generics** (type parameters, inference, **monomorphization**; no constraints yet). They are put in this stage to write the standard library's `Option`, `Result` and `Array`.
+- [ ] Tuples, and destructuring tuples `let (a, b): ...`
+- [ ] `struct` (`Init`, `New`, `this`, methods, `==`, copying values)
+- [ ] `enum` (three kinds of variants, methods) and `match` (exhaustiveness check, guards, ranges, tuple and struct patterns)
+- [ ] `Option` and `Result`: **`enum`s of the standard library** (`Zevic.Core`). `?`, `Context`, `MapErr`, `OkOr`, `Error` and `ErrorKind`
+- [ ] `String`: UTF-8 validation, `Len`, `CharCount`, `+`, comparison, `ToI32` and so on
+- [ ] `Array<T>`: **a type of the standard library** (`Zevic.Array`). Literals, indexing, a Panic when out of range, the main methods such as `Push` and `Pop`
+- [ ] `for (x in arr)` and `for (i, x in arr)`
+- [ ] `mut fn` and the check of deep immutability of `let` (you cannot `Push` to a `let` array)
+- [ ] The check of public and private (capital and small letters)
 
-### ツール
+### The foundation of the standard library (placed in the standard library from the start)
 
-- [ ] `zevic` のオプション一式(`-l` `-L` `-I` `-D` `--cc` `--cxx`)
-- [ ] clang の探索順、見つからないときの案内、バージョンの検査
+`Array` and `Map` are written as **types of the standard library** from the start (not built into the compiler). But Zevic has no reading and writing of pointers, so the compiler provides, as a foundation, **a module only for the standard library, `Zevic.Intrinsics`**.
 
-### 公開の準備
+- [ ] `Intrinsics.Buf<T>`: an area of fixed length. The compiler expands `New(cap)`, `Get(i)`, `Set(i, v)` and `Copy(from, to, n)` directly into IR (ordinary users cannot `import` it).
+- [ ] `Zevic.Array<T>` is written in Zevic as an ordinary `class` that holds a `Buf<T>` (growth by doubling, range checks on the `Array` side)
+- [ ] `String` is not generic, so it is written as a thin type that calls the runtime's C (`zevic_str_*`) through `extern "C"`
+- [ ] The only things treated specially as built-ins are the **syntax** of the literal `[1, 2, 3]` (expanded into calls of `Array.New` and `Push`) and the expansion of `for`
 
-- [x] 名前は「Zevic」で確定している
-- [ ] `README.md`(特徴、ビルド方法、Hello World)、`CONTRIBUTING.md`、行動規範、連絡先の記入
-- [ ] `examples` のうち、動くものは動くと明記。動かないものは「予定」と書く
-- [ ] リポジトリと Organization を**公開**する
+### Implementation notes
 
-**完了**: C ライブラリ(例: SQLite、zlib)を呼ぶサンプルが動く。**v0.1.0 を公開**。
+- The `match` on an `enum` can be a **simple `switch` + matching in order** instead of a decision tree (optimize later).
+- The `?` of a `Result` expands into an early `return` (recheck the order of the expansion in stage 5, when `defer` arrives).
+
+**Done when**: `examples/03`, part of `06` and a sample that uses `Array<T>` work. **v0.0.3**.
 
 ---
 
-## 段階⑤: 抽象化
+## Stage 4: Classes and C interop
 
-**目標**: 標準ライブラリを Zevic 自身で書けるだけの表現力と、GC。
+**Goal**: object-oriented programs that call external C libraries. **It becomes public here (v0.1.0)**.
 
-### 言語機能
+### Language features
 
-- [ ] **単相化の強化**(同じ具体型の組を1回だけ生成、名前の組み立て、生成量の測定)。ジェネリクス本体は段階③・④で入っている
-- [ ] **クロージャ**(捕捉、共有、環境の確保)、関数値、ラムダ、高階メソッド(`Map` `Filter` `Reduce` ...)
-- [ ] `defer`(`return` `?` `break` の経路すべてで実行。Panic では実行されない)
-- [ ] `params`(可変長引数)
-- [ ] 配列・`Map` リテラルの、左辺の型による決定
+- [ ] `class` (reference types, initial values of fields, `Init`, `New`, `static`)
+- [ ] `interface` (methods, default implementations, checking implementations, the function table for dynamic dispatch)
+- [ ] Standard `interface`s: `Equatable`, `Hashable`, `Comparable`, `Iterable` and `Iterator`
+- [ ] Looping over your own `Iterable` with `for`
+- [ ] **Generic constraints** (`<K: Hashable>`, joined with `+`) and checking that they are satisfied. For built-in types (integers, `String` and so on) the compiler provides `Hashable`, `Equatable` and `Comparable`.
+- [ ] `Map<K, V>`: written in Zevic as a **type of the standard library** (`Zevic.Map`) (a hash table that keeps the insertion order, on top of `Intrinsics.Buf`). `Set<T>` likewise.
+- [ ] **C interop**: `extern "C"`, `export "C"`, the table of C types, conversion methods, pointers, variadic arguments `...`, `extern struct`
+- [ ] `Handle<T>`, `NewString` and `Free` (`Zevic.C`)
+- [ ] `native/` and linking `.c`, `.cpp`, `.o`, `.a` and so on (the table of extensions)
+- [ ] Generating `zevic.h` when there is an `export "C"`
+
+### Tools
+
+- [ ] The full set of `zevic` options (`-l`, `-L`, `-I`, `-D`, `--cc`, `--cxx`)
+- [ ] The search order for clang, guidance when it is not found, and the version check
+
+### Preparing to go public
+
+- [x] The name is final: "Zevic"
+- [ ] `README.md` (features, how to build, Hello World), `CONTRIBUTING.md`, a code of conduct, and the contact details
+- [ ] Say clearly which of the `examples` work. Mark those that do not work as "planned".
+- [ ] Make the repositories and the organization **public**
+
+**Done when**: a sample that calls a C library (for example SQLite or zlib) works. **v0.1.0 is published**.
+
+---
+
+## Stage 5: Abstractions
+
+**Goal**: enough expressive power to write the standard library in Zevic itself, and the GC.
+
+### Language features
+
+- [ ] **Stronger monomorphization** (generate each set of concrete types only once, assemble names, measure the amount generated). The generics themselves came in stages 3 and 4.
+- [ ] **Closures** (capture, sharing, allocating the environment), function values, lambdas, higher-order methods (`Map`, `Filter`, `Reduce`, ...)
+- [ ] `defer` (runs on every path of `return`, `?` and `break`; not run on a Panic)
+- [ ] `params` (variadic arguments)
+- [ ] Deciding array and `Map` literals by the type on the left-hand side
 
 ### GC
 
-- [ ] Boehm GC のソースを `runtime/third_party/bgc/` に同梱し、ビルドに加える
-- [ ] `zevic_alloc` / `zevic_alloc_atomic` を GC へ差し替える(呼び出し側は変えない)
-- [ ] `main` の最初で `GC_init`
-- [ ] 負荷テスト(大量の確保、長時間のループ)で、メモリが増え続けないか確認する
-- [ ] C との境界の規則(`Handle`、呼び出しの間だけ有効なポインタ)のテスト
+- [ ] Bundle the Boehm GC sources in `runtime/third_party/bgc/` and add them to the build
+- [ ] Replace `zevic_alloc` / `zevic_alloc_atomic` with the GC (the callers do not change)
+- [ ] `GC_init` at the start of `main`
+- [ ] With load tests (lots of allocation, long loops), check that memory does not keep growing
+- [ ] Tests of the rules at the boundary with C (`Handle`, pointers that are valid only during a call)
 
-### 実装上の要点
+### Implementation notes
 
-- `Array` `Map` は段階③・④から標準ライブラリにあるので、GC の差し替え(`zevic_alloc` の中身を変えるだけ)が、既存のテストを壊さないことを確かめる
-- 単相化は**名前の衝突**と**コード量の増加**が問題になる。生成する関数名にハッシュを入れる。同じ具体型の組は1回だけ生成する
-- 再帰する型(`enum` が自分を持つ)は `class` か `Array` を通す規則を、検査で強制する
+- `Array` and `Map` have been in the standard library since stages 3 and 4, so check that replacing the GC (only changing the content of `zevic_alloc`) does not break the existing tests.
+- For monomorphization the problems are **name collisions** and **growth of the code**. Put a hash in the names of generated functions, and generate each set of concrete types only once.
+- The rule that a recursive type (an `enum` that contains itself) must go through a `class` or an `Array` is enforced by a check.
 
-**完了**: クロージャを使う `Map` `Filter` `Reduce`、`Cache<K, V>` が動く。GC 付きで長時間動く。**v0.2.0**。
+**Done when**: `Map`, `Filter` and `Reduce` with closures, and `Cache<K, V>`, work. It runs for a long time with the GC. **v0.2.0**.
 
 ---
 
-## 段階⑥: ツール
+## Stage 6: Tools
 
-**目標**: 普段の開発が `zevpm` で完結する。標準ライブラリ第2段まで。
+**Goal**: everyday development is complete with `zevpm`. Up to the second batch of the standard library.
 
 ### `zevpm`
 
-- [x] `new` `init` `build` `run` `test` `clean`
-- [x] `zevic.toml` の読み込み(`[package]` `[deps]` `[native]`)
-- [x] `build/` への出力、`kind = "lib"` のときの静的ライブラリと `include/<name>.h`
-- [x] `get` / `remove` / `update`(`git clone --depth 1`、`~/.zevpm` のキャッシュ、`zevic.lock`)
-- [x] 依存の依存の取得、`native/` の自動ビルド
-- [x] `zevpm` 自身の実装: 最初は Python か C で書き、セルフホスティング(段階⑦)で Zevic に置き換える
+- [x] `new`, `init`, `build`, `run`, `test` and `clean`
+- [x] Reading `zevic.toml` (`[package]`, `[deps]` and `[native]`)
+- [x] Output into `build/`, and for `kind = "lib"` a static library and `include/<name>.h`
+- [x] `get` / `remove` / `update` (`git clone --depth 1`, the cache in `~/.zevpm`, and `zevic.lock`)
+- [x] Fetching the dependencies of dependencies, and building `native/` automatically
+- [x] The implementation of `zevpm` itself: first written in Python or C, and replaced by Zevic at self-hosting (stage 7)
 
-### テスト機能
+### Test features
 
-- [x] `test "名前" { ... }` ブロックと `_test.zev`
-- [x] `Zevic.Test`(`Equal` `NotEqual` `True` `False` `Some` `None` `Ok` `Err` `Panics` `Fail`)
-- [x] ランナー(`setjmp` / `longjmp` で、テスト内の Panic をそのテストの失敗にする)
-- [x] 結果の表示、終了コード、名前での絞り込み
+- [x] `test "name" { ... }` blocks and `_test.zev`
+- [x] `Zevic.Test` (`Equal`, `NotEqual`, `True`, `False`, `Some`, `None`, `Ok`, `Err`, `Panics` and `Fail`)
+- [x] The runner (with `setjmp` / `longjmp`, a Panic inside a test becomes the failure of that test)
+- [x] Showing the results, the exit code, and filtering by name
 
-### 標準ライブラリ第2段
+### The second batch of the standard library
 
-- [x] `Zevic.Fs`: `ReadAll` `WriteAll` `Open` `Exists` `List` `Remove`(すべて `Result`、`errno` → `ErrorKind`)
-- [x] `Zevic.Text`: `Split` `Join` `Trim` `Replace` `StartsWith` `EndsWith` ほか
-- [x] `Zevic.Math`: 数学関数、定数
-- [x] `Zevic.Time`: `Now` `Duration` `Sleep`
-- [x] `Zevic.Env`: `Get` `Set` `ProgramName` `Exit` `RawArgs`
-- [x] `Zevic.Process`: 外部コマンドの起動(`Run(cmd, args)` で終了コードと出力を `Result` で返す)。セルフホスティング(段階⑦)で `clang` と `git` を呼ぶために必要なので、第3段から**第2段へ前倒し**した
-- [x] OS の違い(Windows / POSIX)は同梱の `.c` で吸収
+- [x] `Zevic.Fs`: `ReadAll`, `WriteAll`, `Open`, `Exists`, `List` and `Remove` (all return a `Result`; `errno` becomes an `ErrorKind`)
+- [x] `Zevic.Text`: `Split`, `Join`, `Trim`, `Replace`, `StartsWith`, `EndsWith` and more
+- [x] `Zevic.Math`: math functions and constants
+- [x] `Zevic.Time`: `Now`, `Duration` and `Sleep`
+- [x] `Zevic.Env`: `Get`, `Set`, `ProgramName`, `Exit` and `RawArgs`
+- [x] `Zevic.Process`: starting external commands (`Run(cmd, args)` returns the exit code and the output as a `Result`). It is needed to call `clang` and `git` for self-hosting (stage 7), so it was **moved forward from the third batch to the second**.
+- [x] Differences between OSes (Windows / POSIX) are absorbed by bundled `.c` files
 
-### 3つの OS
+### The three OSes
 
-- [ ] CI を Linux / macOS / Windows の3つで通す(Linux のみ確認済み)
-- [ ] パスの区切り、改行コード、`.exe` の扱い、clang の探索(仕様書の順)(Windows / macOS は未確認)
+- [ ] Pass CI on Linux, macOS and Windows (only Linux has been checked)
+- [ ] Path separators, newline codes, handling of `.exe`, and the clang search (in the order of the specification) (Windows and macOS are not checked yet)
 
-**完了**: `zevpm new` → `zevpm run` → `zevpm test` が3つの OS で動く。サンプル01〜10がすべて動く。**v0.3.0**。
+**Done when**: `zevpm new`, `zevpm run` and `zevpm test` work on the three OSes. Samples 01 to 10 all work. **v0.3.0**.
 
 ---
 
-## 段階⑦: セルフホスティング
+## Stage 7: Self-hosting
 
-**目標**: Zevic で書いたコンパイラ(`zevic1`)が、自分自身をビルドできる。
+**Goal**: the compiler written in Zevic (`zevic1`) can build itself.
 
-### 7-1. 前提の確認
+### 7-1. Checking the prerequisites
 
-- [ ] 段階①〜⑥の機能で、コンパイラが書けるか(必要な標準ライブラリ: 文字列、配列、`Map`、ファイル、プロセス起動 `Zevic.Process`)
-- [ ] 足りないものは、先に標準ライブラリへ足す(`Zevic.Process` は段階⑥で入っている)
-- [ ] 仕様に足りない機能が見つかったら、**提案(`proposals/`)を書いてから**入れる
+- [ ] Can the compiler be written with the features of stages 1 to 6? (The standard library needed: strings, arrays, `Map`, files and starting processes with `Zevic.Process`.)
+- [ ] Add what is missing to the standard library first (`Zevic.Process` came in stage 6).
+- [ ] If a feature missing from the specification is found, **write a proposal (`proposals/`) first**, then add it.
 
-### 7-2. 書き直す順序
+### 7-2. The order of rewriting
 
-`zevic0`(C)の構成をそのまま、同じ順で Zevic に移す。
+Move the structure of `zevic0` (C) as it is to Zevic, in the same order.
 
-1. `lexer` → 2. `ast` → 3. `parser` → 4. `resolve` → 5. `check` → 6. `mono` → 7. `lower` → 8. `emit_ll` → 9. `driver`
+1. `lexer` -> 2. `ast` -> 3. `parser` -> 4. `resolve` -> 5. `check` -> 6. `mono` -> 7. `lower` -> 8. `emit_ll` -> 9. `driver`
 
-- 各部を移すたびに、`zevic0` で**Zevic 版をコンパイルして**、C 版と**同じ出力(AST ダンプ、`.ll`)**になることを確認する(差分テスト)
-- 最後に、全体を結合する
+- Each time a part is moved, **compile the Zevic version** with `zevic0` and check that it gives **the same output (AST dump, `.ll`)** as the C version (differential tests).
+- Finally, join everything.
 
-### 7-3. ブートストラップ
+### 7-3. Bootstrapping
 
 ```
-zevic0 (C製) ─コンパイル→ zevic1 (Zevic製のコンパイラ)
-zevic1       ─コンパイル→ zevic2
-zevic2       ─コンパイル→ zevic3
+zevic0 (written in C) -compile-> zevic1 (the compiler written in Zevic)
+zevic1                -compile-> zevic2
+zevic2                -compile-> zevic3
 ```
 
-- [x] `zevic1` と `zevic2` が出力する `.ll` が**完全に一致**する(一致したらセルフホスティング成功)
-- [x] 最終的な `.ll` を `bootstrap/zevic.ll` として**コミットする**。C がなくても、`clang bootstrap/zevic.ll runtime/*.c` だけでコンパイラを作れる
-- [x] CI で、毎回ブートストラップを検査する
+- [x] The `.ll` files emitted by `zevic1` and `zevic2` are **exactly the same** (when they match, self-hosting has succeeded)
+- [x] **Commit** the final `.ll` as `bootstrap/zevic.ll`. Even without C, the compiler can be built with just `clang bootstrap/zevic.ll runtime/*.c`.
+- [x] Check the bootstrap in CI every time
 
-### 7-4. 残りのツール
+### 7-4. The remaining tools
 
-- [x] `zevfmt`(`tools/zevfmt/`。コメントと改行を保つ。冪等、AST不変をテスト。構文チェックは `zevic --dump-ast` でコンパイラのパーサを使い回す)
-- [x] `zevpm` を Zevic で書き直す(`tools/zevpm/`。C 版 `zevpm/` は凍結版として残し、同じ結合テストを両方に通す)
-- [ ] `zevic0`(C版)は残すが、**新機能は Zevic 版にだけ入れる**。C版は、ブートストラップのための凍結版にする
+- [x] `zevfmt` (`tools/zevfmt/`. Keeps comments and newlines. Idempotence and an unchanged AST are tested. The syntax check reuses the compiler's parser through `zevic --dump-ast`.)
+- [x] Rewrite `zevpm` in Zevic (`tools/zevpm/`. The C version `zevpm/` is kept as a frozen version, and the same integration tests run on both.)
+- [x] `zevic0` (the C version) was split into a separate repository (zevic-lang/zevic-c) in v0.4.1. This repository builds with only `bootstrap/zevic.ll` and clang.
 
-### 7-5. 言語と標準ライブラリの追加(提案が先)
+### 7-5. Additions to the language and the standard library (proposal first)
 
-- [x] ループのラベルと `break@ラベル` `continue@ラベル`(提案 0001)
-- [x] 非同期(`async` `await`、`Zevic.Async`)(提案 0002)
-- [x] HTTP(`Zevic.Http`)(提案 0003。HTTPSは未対応。Windows(Winsock)は未検証)
+- [x] Loop labels and `break@label` / `continue@label` (proposal 0001)
+- [x] Asynchronous code (`async`, `await` and `Zevic.Async`) (proposal 0002)
+- [x] HTTP (`Zevic.Http`) (proposal 0003. HTTPS is not supported. Windows (Winsock) is unverified.)
 
-**完了**: `zevic2` の `.ll` が一致し、CI が通る。**v0.4.0**。
-
----
-
-## 仕上げ(v1.0 に向けて)
-
-### 言語
-
-- [ ] 仕様書の凍結。未決事項のうち、必要なものを決める(並行処理、`Integer` など)
-- [ ] 後方互換の方針を書く(1.x では、既存のコードを壊す変更をしない)
-- [ ] 標準ライブラリ第3段(`Net` `Thread` `Async` `Json` `Random`。`Process` は段階⑥へ移した)。並行処理は、GC との相性(Boehm のスレッド対応)を確認してから
-
-### ツールと品質
-
-- [ ] エラーメッセージの改善(候補の提示、複数エラーの表示)
-- [ ] コンパイル時間と生成コードの測定(ベンチマークを `tests/bench/` に)
-- [ ] `-g` のデバッグ情報(DWARF)。デバッガで追えること
-- [ ] ファズ(字句・構文解析に、ランダムな入力を食わせて、クラッシュしないこと)
-- [ ] 言語サーバ(LSP)とエディタ拡張は、1.0 のあとに検討
-
-### 配布
-
-- [ ] リリースの作り方: 3つの OS の実行ファイル(`zevic` `zevpm` `zevfmt`)と、`runtime/`、標準ライブラリを1つにまとめる
-- [ ] インストーラ(スクリプト)。`winget` `brew` などのパッケージの検討
-- [ ] 公式サイトとチュートリアル(`docs/tutorial/`)、言語ツアー
-- [ ] 提案(`proposals/`)の運用が回っているか確認
+**Done when**: the `.ll` of `zevic2` matches and CI passes. **v0.4.0**.
 
 ---
 
-## リポジトリ構成(最終形)
+## Polish (toward v1.0)
+
+### Language
+
+- [ ] Freeze the specification. Decide the necessary ones among the open questions (concurrency, `Integer` and so on).
+- [ ] Write the backward compatibility policy (no changes that break existing code in 1.x)
+- [ ] The third batch of the standard library (`Net`, `Thread`, `Async`, `Json` and `Random`; `Process` was moved to stage 6). For concurrency, first check how it works with the GC (the thread support of Boehm).
+
+### Tools and quality
+
+- [ ] Better error messages (suggesting candidates, showing several errors)
+- [ ] Measure compile time and generated code (benchmarks in `tests/bench/`)
+- [ ] Debug information for `-g` (DWARF). It can be followed in a debugger.
+- [ ] Fuzzing (feed random input to the lexer and parser, and check that they do not crash)
+- [ ] A language server (LSP) and editor extensions are to be considered after 1.0
+
+### Distribution
+
+- [ ] How to make a release: put the executables for the three OSes (`zevic`, `zevpm` and `zevfmt`), `runtime/` and the standard library together
+- [ ] An installer (script). Consider packages for `winget`, `brew` and so on.
+- [ ] An official site and a tutorial (`docs/tutorial/`), and a tour of the language
+- [ ] Check that the process of proposals (`proposals/`) is working
+
+---
+
+## Repository layout (final form)
 
 ```
 zevic/
-  zevic0/                 C製コンパイラ(凍結版)
-  compiler/               Zevic製コンパイラ(セルフホスト版)
+  tools/zevic1/           the compiler written in Zevic (the C zevic0 is split off to zevic-lang/zevic-c)
+  compiler/               the compiler written in Zevic (self-hosted version)
   runtime/
-    zevic_rt.c  ...       ランタイム
-    third_party/bgc/      Boehm GC
-  packages/Zevic/         標準ライブラリ(Zevic.*)。zevic.toml + src/
+    zevic_rt.c  ...       the runtime
+    third_party/bgc/      the Boehm GC
+  packages/Zevic/         the standard library (Zevic.*): zevic.toml + src/
   tools/
     zevpm/  zevfmt/
-  bootstrap/zevic.ll      コミットしておく .ll
+  bootstrap/zevic.ll      the .ll that is kept committed
   tests/
-    golden/               ゴールデンテスト
-    bench/                ベンチマーク
+    golden/               golden tests
+    bench/                benchmarks
     run.py
   Makefile
   LICENSE  README.md  CHANGELOG.md
 
 docs/
-  spec/zevic-spec.md      仕様書
-  proposals/              言語の変更提案
-  design/                 設計メモ(ir-notes.md など)
+  spec/zevic-spec.md      the specification
+  proposals/              proposals for changes to the language
+  design/                 design notes (ir-notes.md and others)
   tutorial/
 
-examples/                 サンプル(01〜10、apps/)
-.github/                  Organization共通のファイル
+examples/                 samples (01 to 10, apps/)
+.github/                  files shared by the organization
 ```
 
 ---
 
-## リスクと対策
+## Risks and countermeasures
 
-| リスク | 対策 |
+| Risk | Countermeasure |
 | --- | --- |
-| LLVM IR の仕様変更(clang の版差) | clang 15 以上に固定。CI で複数の版を試す。ポインタは常に `ptr` |
-| 単相化でコードが肥大化する | 同じ具体型の組は1回だけ生成。最適化(`-O1`)に頼る。測定して判断 |
-| Boehm GC と C の境界でのバグ | 境界の規則を仕様に書いた。`Handle` を使う。境界専用のテストを作る |
-| Windows 固有の問題(パス、MSVC のライブラリ) | 段階①から Windows で動かす。CI に早めに入れる |
-| `Array` `Map` を標準ライブラリに置くため、ジェネリクスが段階③から要る | 段階③は制約なしの最小版だけ入れる。制約は段階④(`Map` と同時) |
-| 機能が増えて終わらない | 仕様書の「将来の検討」は、v1.0 まで入れない。各段階の範囲を守る |
-| 一人で続けられなくなる | 小さく区切って、毎段階でタグを打つ。サンプルとテストで進捗が見えるようにする |
-| セルフホスティングで仕様の穴が見つかる | 見つかったら提案を書いて入れる。コンパイラ自体が最大のテストになる |
+| Changes to the LLVM IR specification (differences between clang versions) | Fix it to clang 15 or newer. Try several versions in CI. Pointers are always `ptr`. |
+| Monomorphization bloats the code | Generate each set of concrete types only once. Rely on optimization (`-O1`). Measure and decide. |
+| Bugs at the boundary between the Boehm GC and C | The rules for the boundary are written in the specification. Use `Handle`. Make tests only for the boundary. |
+| Problems specific to Windows (paths, the MSVC libraries) | Run on Windows from stage 1. Add it to CI early. |
+| Generics are needed from stage 3 because `Array` and `Map` live in the standard library | Stage 3 has only the minimal version without constraints. Constraints come in stage 4 (together with `Map`). |
+| The features keep growing and it never ends | Do not add the "future considerations" of the specification before v1.0. Keep to the scope of each stage. |
+| Not being able to continue alone | Divide the work into small pieces and tag every stage. Make progress visible with samples and tests. |
+| Self-hosting finds holes in the specification | Write a proposal and add the fix when found. The compiler itself is the biggest test. |
 
 ---
 
-## すぐに始めること(最初の1週間)
+## What to start with (the first week)
 
-1. 非公開リポジトリ4つの作成、`.github` と仕様書の配置(0-2)
-2. clang の確認(0-3)
-3. 手書きの `hello.ll` を動かす(1-1)
-4. `lexer.c` の着手(段階①の最初)
+1. Create the four private repositories and place `.github` and the specification (0-2)
+2. Check clang (0-3)
+3. Run a hand-written `hello.ll` (1-1)
+4. Start on `lexer.c` (the start of stage 1)

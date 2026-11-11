@@ -1,44 +1,44 @@
-# 提案 0005: 乱数(`Zevic.Random`)
+# Proposal 0005: random numbers (`Zevic.Random`)
 
-- 状態: 採用(2026-11-03、実装は同日)
-- 日付: 2026-11-03
+- Status: accepted (2026-11-03, implemented the same day)
+- Date: 2026-11-03
 
-## 動機
+## Motivation
 
-サイコロ、シャッフル、テストデータなど、乱数は小さなプログラムでもよく使う。標準ライブラリになく、`Process` や C を経由するしかない。
+Dice, shuffling and test data: random numbers are used often, even in small programs. The standard library has none, so you have to go through `Process` or C.
 
-## 提案
+## Proposal
 
-新しい標準ライブラリ `Zevic.Random`。ランタイムには何も足さず、Zevic だけで書く。
+A new standard library module, `Zevic.Random`. Nothing is added to the runtime; it is written in Zevic alone.
 
 ```
 import Zevic.Random
 
-mut rng: Random.Rng = Random.Rng.New(42)       // 種を決める: 同じ種なら、どの環境でも同じ数列
-let dice: I64 = rng.Int(1, 7)                    // 1以上7未満
-let p: F64 = rng.Float()                         // 0.0以上1.0未満
+mut rng: Random.Rng = Random.Rng.New(42)       // fix the seed: the same seed gives the same sequence on every system
+let dice: I64 = rng.Int(1, 7)                    // 1 or more, less than 7
+let p: F64 = rng.Float()                         // 0.0 or more, less than 1.0
 let up: Bool = rng.Bool()
-let seeded: Random.Rng = Random.Rng.Seeded()     // 時計から種を作る(実行のたびに違う)
+let seeded: Random.Rng = Random.Rng.Seeded()     // the seed comes from the clock (different on every run)
 
-Random.Shuffle(rng, xs)                          // 並べ替える(Fisher-Yates)
-let one: Option<I64> = Random.Pick(rng, xs)      // 1つ選ぶ(空なら None)
+Random.Shuffle(rng, xs)                          // reorder (Fisher-Yates)
+let one: Option<I64> = Random.Pick(rng, xs)      // pick one (None when empty)
 ```
 
-- アルゴリズムは SplitMix64。状態は 64 ビット1つで、速く、種が1つ違うだけで数列が大きく変わる。公開されている参照値(種 1234567 で 6457827717110365317, 3203168211198807973, ...)をテストに使う
-- `Int(low, high)` は、偏りが出ないように、片寄る範囲の値を捨てて引き直す。`high <= low` は `Panic`。範囲が `I64` より広くても(`I64.Min` から `I64.Max` まで)動く
-- **暗号には使えない**。数個の出力から、残りを予測できる。ドキュメントにそう書く
-- 生成器は `class`(状態を持つ)。スレッドの間で共有しない(タスクごとに作る)
-- `Rng`のメソッドにせず、`Shuffle` と `Pick` は関数にする(ジェネリックなメソッドを避ける)
+- The algorithm is SplitMix64. The state is a single 64-bit value; it is fast, and a one-bit difference in the seed changes the sequence a lot. The published reference values (seed 1234567 gives 6457827717110365317, 3203168211198807973, ...) are used in the tests.
+- `Int(low, high)` avoids bias by throwing away values from the lopsided range and drawing again. `high <= low` is a `Panic`. It works even when the range is wider than `I64` (from `I64.Min` to `I64.Max`).
+- **Not for cryptography.** The rest can be predicted from a few outputs. The documentation says so.
+- The generator is a `class` (it has state). Do not share it between threads (make one per task).
+- `Shuffle` and `Pick` are functions, not methods of `Rng` (to avoid generic methods).
 
-## 入れないもの
+## Not included
 
-- 正規分布などの分布、OS の乱数源(`/dev/urandom`)。必要になったら別の提案で
-- グローバルな乱数生成器(`Random.Int(...)`のような書き方)。状態を隠すので、テストしづらい
+- Distributions such as the normal distribution, and the OS source of randomness (`/dev/urandom`). To be handled in a separate proposal when needed.
+- A global generator (a style such as `Random.Int(...)`). It hides state and is hard to test.
 
-## 影響
+## Impact
 
-- 標準ライブラリだけ。言語・ランタイム・`zevfmt`への影響なし
+- The standard library only. No impact on the language, the runtime or `zevfmt`.
 
-## テスト
+## Tests
 
-- 参照値、同じ種なら同じ数列、サイコロの偏り(60000回で各面 9500〜10500)、負の範囲と最大の範囲、`Float` の範囲と平均、`Shuffle` が要素を保つこと、`Pick`、`Bool`
+- Reference values, the same sequence for the same seed, the balance of the dice (each face 9500 to 10500 times in 60000 rolls), negative ranges and the largest range, the range and the mean of `Float`, `Shuffle` keeping the elements, `Pick` and `Bool`.

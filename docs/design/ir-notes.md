@@ -1,23 +1,23 @@
-# IR ノート(フェーズ1の確認結果)
+# IR notes (results of the phase 1 experiments)
 
-`docs/design/ir-experiments/` の手書き `.ll` を clang 18 でビルドして確かめた内容です。
-コンパイラ(`zevic0`)が出力する形の見本になります。
+What was checked by building the hand-written `.ll` files in `docs/design/ir-experiments/` with clang 18.
+They are samples of the shape the compiler emits.
 
-| 確認したこと | ファイル | 結果 |
+| What was checked | File | Result |
 | --- | --- | --- |
-| 最小の Hello World(`ptr` の opaque pointer) | `hello.ll` | `clang hello.ll` で動く |
-| ランタイム(C)を呼ぶ | `rt_call.ll` | `clang a.ll zevic_rt.c` で結合できる。Panic は終了コード 101 |
-| `I32` の加算とオーバーフロー検査 | `overflow.ll` | `llvm.sadd.with.overflow.i32` → 起きたら `zevic_panic` |
-| `String` = `{ ptr, i64 }` | `string_enum.ll` | 定数と `extractvalue` で扱える |
-| `enum` = `{ i32 tag, [N x i64] }` | `string_enum.ll` | ペイロードの領域に、バリアントの構造体を `store`/`load` できる |
-| `interface` 値 = `{ ptr, ptr }` | `iface_closure.ll` | 関数表の先頭から関数を読んで間接呼び出し |
-| クロージャ = `{ ptr fn, ptr env }` | `iface_closure.ll` | 関数の第1引数が環境 |
+| The smallest Hello World (opaque `ptr`) | `hello.ll` | works with `clang hello.ll` |
+| Calling the runtime (C) | `rt_call.ll` | `clang a.ll zevic_rt.c` links them. A Panic exits with code 101 |
+| `I32` addition and the overflow check | `overflow.ll` | `llvm.sadd.with.overflow.i32`, then `zevic_panic` if it happened |
+| `String` = `{ ptr, i64 }` | `string_enum.ll` | constants and `extractvalue` work |
+| `enum` = `{ i32 tag, [N x i64] }` | `string_enum.ll` | a variant's struct can be `store`d to and `load`ed from the payload area |
+| `interface` value = `{ ptr, ptr }` | `iface_closure.ll` | read a function from the start of the function table and call it indirectly |
+| Closure = `{ ptr fn, ptr env }` | `iface_closure.ll` | the environment is the first argument of the function |
 
-## 実装に反映する決まり
+## Rules carried into the implementation
 
-- モジュールには `target triple` を書かない。`clang` に渡すと警告が出るので、ドライバが `-Wno-override-module` を付ける
-- `enum` のペイロードは `[N x i64]`(N は最大のバリアントを 8 バイト単位に切り上げたもの)。ペイロードが無いときは `{ i32 }`
-- 関数に渡す `this` は常に `ptr`(`class` は参照そのもの、`struct`/`enum` は値の置き場所)
-- ランタイムへ渡す `String` などの集合体は、**ポインタ渡し**。戻り値は先頭の出力ポインタで受ける(ABI の差を避けるため)
-- `alloca` はすべて関数の入口ブロックにまとめる(ループ内で増やさない)
-- `unreachable` や `ret` のあとに命令が続かないよう、終端のあとは新しい(到達不能な)ブロックを開く
+- A module has no `target triple`. Passing it to `clang` gives a warning, so the driver adds `-Wno-override-module`.
+- The payload of an `enum` is `[N x i64]` (N is the largest variant rounded up to 8-byte units). Without a payload it is `{ i32 }`.
+- The `this` passed to a function is always a `ptr` (for a `class` it is the reference itself, for a `struct` / `enum` the place where the value lives).
+- Aggregates such as `String` are **passed by pointer** to the runtime. The result comes back through a leading output pointer (to avoid ABI differences).
+- All `alloca`s go into the entry block of the function (none grow inside loops).
+- No instruction may follow `unreachable` or `ret`: after a terminator, a new (unreachable) block is opened.
