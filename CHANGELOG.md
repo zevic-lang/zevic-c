@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.4.4
+## 0.4.5
+
+Brought up to date with zevic-lang/zevic 0.4.5:
+
+- Process output goes under `$TMPDIR` (falling back to `/tmp`), so Termux and other systems without a writable `/tmp` work
 
 Brought up to date with zevic-lang/zevic 0.4.4:
 

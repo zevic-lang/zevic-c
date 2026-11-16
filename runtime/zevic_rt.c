@@ -1637,11 +1637,20 @@ static char *temp_path(void) {
     if (!GetTempPathA(MAX_PATH, dir) || !GetTempFileNameA(dir, "zev", 0, name)) return NULL;
     return strdup(name);
 #else
-    char tmpl[] = "/tmp/zevic-proc-XXXXXX";
+    /* $TMPDIR first: Termux has no writable /tmp (its temp dir is $PREFIX/tmp) */
+    const char *t = getenv("TMPDIR");
+    if (!t || !*t) t = "/tmp";
+    size_t cap = strlen(t) + sizeof("/zevic-proc-XXXXXX");
+    char *tmpl = malloc(cap);
+    if (!tmpl) return NULL;
+    snprintf(tmpl, cap, "%s/zevic-proc-XXXXXX", t);
     int fd = mkstemp(tmpl);
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        free(tmpl);
+        return NULL;
+    }
     close(fd);
-    return strdup(tmpl);
+    return tmpl;
 #endif
 }
 
