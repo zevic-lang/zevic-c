@@ -1911,9 +1911,19 @@ int32_t zevic_test_main(void) {
 typedef struct { HANDLE h; } zevic_thread;
 typedef struct { void (*fn)(void *); void *env; } zevic_thread_start_info;
 
+/* Threads made with CreateThread are not known to the collector, so each one registers itself:
+   otherwise the collector could miss its stack and free objects it still uses. */
 static DWORD WINAPI zevic_thread_main(LPVOID p) {
     zevic_thread_start_info *si = p;
+    struct GC_stack_base sb;
+    int registered = 0;
+    if (GC_get_stack_base(&sb) == GC_SUCCESS && GC_register_my_thread(&sb) == GC_SUCCESS) {
+        registered = 1;
+    }
     si->fn(si->env);
+    if (registered) {
+        GC_unregister_my_thread();
+    }
     return 0;
 }
 
@@ -1926,6 +1936,25 @@ void zevic_thread_start(void (*fn)(void *), void *env) {
     if (t->h) CloseHandle(t->h); /* detached: a task reports its end through its own result slot */
     free(t);
 }
+
+/* Joinable threads (Zevic.Thread): the handle is returned and must be joined once. */
+void *zevic_thread_spawn(void (*fn)(void *), void *env) {
+    zevic_thread_start_info *si = GC_malloc_uncollectable(sizeof *si);
+    si->fn = fn;
+    si->env = env;
+    HANDLE h = CreateThread(NULL, 0, zevic_thread_main, si, 0, NULL);
+    if (!h) {
+        fprintf(stderr, "panic: cannot start a thread\n");
+        exit(101);
+    }
+    return h;
+}
+void zevic_thread_join(void *h) {
+    WaitForSingleObject(h, INFINITE);
+    CloseHandle(h);
+}
+void zevic_thread_yield(void) { SwitchToThread(); }
+void zevic_thread_detach(void *h) { CloseHandle(h); }
 
 void *zevic_mutex_new(void) {
     CRITICAL_SECTION *m = malloc(sizeof *m);
@@ -1944,6 +1973,7 @@ void zevic_cond_wait(void *c, void *m) { SleepConditionVariableCS(c, m, INFINITE
 void zevic_cond_broadcast(void *c) { WakeAllConditionVariable(c); }
 #else
 #include <pthread.h>
+#include <sched.h>
 
 typedef struct { void (*fn)(void *); void *env; } zevic_thread_start_info;
 
@@ -1965,6 +1995,28 @@ void zevic_thread_start(void (*fn)(void *), void *env) {
         exit(101);
     }
     pthread_detach(t); /* a task reports its end through its own result slot */
+}
+
+/* Joinable threads (Zevic.Thread): the handle is returned and must be joined once. */
+void *zevic_thread_spawn(void (*fn)(void *), void *env) {
+    pthread_t *t = malloc(sizeof *t);
+    zevic_thread_start_info *si = GC_malloc_uncollectable(sizeof *si);
+    si->fn = fn;
+    si->env = env;
+    if (pthread_create(t, NULL, zevic_thread_main, si) != 0) {
+        fprintf(stderr, "panic: cannot start a thread\n");
+        exit(101);
+    }
+    return t;
+}
+void zevic_thread_join(void *h) {
+    pthread_join(*(pthread_t *)h, NULL);
+    free(h);
+}
+void zevic_thread_yield(void) { sched_yield(); }
+void zevic_thread_detach(void *h) {
+    pthread_detach(*(pthread_t *)h);
+    free(h);
 }
 
 void *zevic_mutex_new(void) {

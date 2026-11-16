@@ -1,5 +1,7 @@
 module Zevic.Async
 
+import Zevic.Thread
+
 // Tasks that run on their own threads, channels and mutexes.
 //
 //     let a: Task<I32> = async { slow(3) }        // starts at once
@@ -9,7 +11,6 @@ module Zevic.Async
 // or a `Mutex`.
 
 extern "zevic" {
-    fn zevic_thread_start(f: fn() -> Unit)
     fn zevic_mutex_new() -> *CVoid
     fn zevic_mutex_lock(m: *CVoid)
     fn zevic_mutex_unlock(m: *CVoid)
@@ -90,7 +91,9 @@ fn Spawn<T>(f: fn() -> T) -> Task<T> {
         let v: T = f()
         slot.Set(v)
     }
-    zevic_thread_start(run)
+    // The task is awaited through its slot, so the thread is detached: nothing joins it.
+    mut t: Thread.Thread = Thread.Spawn(run)
+    t.Detach()
     Task.New(slot)
 }
 

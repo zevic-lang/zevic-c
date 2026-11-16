@@ -879,11 +879,7 @@ static char *check_single(const char *name, List *sources) {
 static void test_examples(void) {
     char *sample = spec_sample();
     char *wc = slurp("examples/apps/wordcount/src/Main.zev");
-    if (!sample) {
-        // the heading is searched for by its text: renaming it (a translation, say) must be followed here
-        printf("FAIL  no code block under the heading \"## Appendix B\" in docs/spec/zevic-spec.md\n");
-        g_failed++;
-    } else if (!wc || strcmp(sample, strip(wc)) != 0) {
+    if (!sample || !wc || strcmp(sample, strip(wc)) != 0) {
         printf("FAIL  specification appendix B differs from examples/apps/wordcount/src/Main.zev\n");
         g_failed++;
     }

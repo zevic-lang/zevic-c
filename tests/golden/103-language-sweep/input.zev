@@ -1,0 +1,56 @@
+module Main
+
+import Zevic.Console
+
+interface Shape {
+    fn Area() -> I64
+}
+
+class Sq : Shape {
+    side: I64
+    fn Init(side: I64) { this.side = side }
+    fn Area() -> I64 { this.side * this.side }
+}
+
+enum Opt {
+    Has(I64)
+    Nothing
+}
+
+fn parse(n: I64) -> Result<I64, Error> {
+    if (n < 0) {
+        return Err(Error.New(ErrorKind.InvalidFormat, "negative"))
+    }
+    Ok(n * 2)
+}
+
+fn twice(n: I64) -> Result<I64, Error> {
+    let v: I64 = parse(n)?
+    Ok(v + 1)
+}
+
+fn Main() {
+    let s: Shape = Sq.New(3)
+    Console.Println("area=${s.Area()}")
+    let o: Opt = Opt.Has(5)
+    let r: I64 = match (o) {
+        Opt.Has(x) => x,
+        Opt.Nothing => 0,
+    }
+    Console.Println("match=${r}")
+    match (twice(4)) {
+        Ok(v) => Console.Println("try=${v}"),
+        Err(e) => Console.Println(e.Message()),
+    }
+    match (twice(-1)) {
+        Ok(v) => Console.Println("try=${v}"),
+        Err(e) => Console.Println("err=${e.Message()}"),
+    }
+    mut total: I64 = 0
+    for (x in [1, 2, 3]) {
+        total += x
+    }
+    Console.Println("sum=${total}")
+    let f: fn(I64) -> I64 = (x: I64) => x + 100
+    Console.Println("lambda=${f(1)}")
+}

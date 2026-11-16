@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3
+
+Brought up to date with zevic-lang/zevic 0.4.3:
+
+- Standard library (`packages/Zevic/src`) and runtime (`runtime/`) copied from zevic 0.4.3, including `Zevic.Thread` and `Zevic.BigInt`
+- `zevic0`: `<`, `<=`, `>` and `>=` call `Compare` on a struct or class that implements `Comparable`; `==` on a struct that implements `Equatable` calls its `Equals`
+- Windows: threads register with the Boehm collector (`zevic_thread_main`)
+- Golden tests 100 to 103 copied from zevic; all pass with `zevic0`
+
 ## Split from zevic-lang/zevic (after 0.4.1)
 
 This repository keeps the C implementation (`zevic0`, `zevpm/`). The self-hosting compiler (`tools/zevic1`) and `bootstrap/` were removed here; they live in zevic-lang/zevic. History up to v0.4.1 is shared with that repository. CI builds, tests and releases the C compiler on Linux, macOS and Windows as before; version 0.4.1.

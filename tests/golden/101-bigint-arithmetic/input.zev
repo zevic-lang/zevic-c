@@ -1,0 +1,26 @@
+module Main
+
+import Zevic.Console
+import Zevic.BigInt
+
+fn Main() {
+    let neg5: BigInt.BigInt = BigInt.FromI64(-5)
+    Console.Println(neg5.ToString())
+    let big: BigInt.BigInt = BigInt.FromI64(2).Pow(100)
+    Console.Println(big.ToString())
+    let parsed: BigInt.BigInt = BigInt.Parse("123456789012345678901234567890").Unwrap()
+    Console.Println(parsed.ToString())
+    Console.Println(BigInt.FromI64(3).Sub(BigInt.FromI64(10)).ToString())
+    let (q, r): (BigInt.BigInt, BigInt.BigInt) = big.DivRem(BigInt.FromI64(3))
+    Console.Println("q=${q.ToString()} r=${r.ToString()}")
+    let (q2, r2): (BigInt.BigInt, BigInt.BigInt) = BigInt.FromI64(-7).DivRem(BigInt.FromI64(2))
+    Console.Println("q=${q2.ToString()} r=${r2.ToString()}")
+    let x: BigInt.BigInt = BigInt.Parse("999999999999999999").Unwrap()
+    Console.Println(x.Mul(x).ToString())
+    Console.Println(BigInt.FromI64(-3).Pow(3).ToString())
+    Console.Println("eq=${BigInt.Parse("100").Unwrap() == BigInt.FromI64(100)}")
+    Console.Println("lt=${BigInt.FromI64(-1) < BigInt.FromI64(0)}")
+    Console.Println("i64min=${BigInt.FromI64(-9223372036854775807 - 1).ToI64().UnwrapOr(0)}")
+    Console.Println("overflow=${big.ToI64().UnwrapOr(-1)}")
+    Console.Println("bad=${BigInt.Parse("12x").UnwrapOr(BigInt.FromI64(7)).ToString()}")
+}
