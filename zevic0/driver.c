@@ -316,7 +316,7 @@ int driver_build(const char *clang, const char *home, const char *ll_path, const
     /* C++ code needs the C++ driver, so the standard library gets linked */
     const char *driver = has_cpp ? (o->cxx ? o->cxx : sibling_cxx(clang)) : clang;
     sb_puts(&cmd, quote(driver));
-    sb_printf(&cmd, " %s -w -Wno-override-module", o->opt ? o->opt : "-O1");
+    sb_printf(&cmd, " %s -w -Wno-override-module", o->opt ? o->opt : "-O0");
     if (o->debug) sb_puts(&cmd, " -g");
     sb_printf(&cmd, " %s", quote(ll_path));
     /* the runtime and the garbage collector: cached objects, or the sources when there is no cache */
@@ -371,7 +371,7 @@ static char *sibling_tool(const char *clang, const char *name) {
 
 static int compile_object(const char *driver, BuildOpts *o, const char *src, const char *obj, bool force_c) {
     SB cmd = {0};
-    sb_printf(&cmd, "%s -c -w -Wno-override-module %s", quote(driver), o->opt ? o->opt : "-O1");
+    sb_printf(&cmd, "%s -c -w -Wno-override-module %s", quote(driver), o->opt ? o->opt : "-O0");
     if (o->debug) sb_puts(&cmd, " -g");
     if (o->pic) sb_puts(&cmd, " -fPIC");
     if (force_c) sb_puts(&cmd, " -x c");

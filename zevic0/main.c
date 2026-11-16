@@ -22,7 +22,7 @@ static void usage(void) {
           "  --pic              with --lib: position independent code, so the archive can be linked into a shared library\n"
           "  --emit-ll          write the LLVM IR and stop\n"
           "  --emit-header <f>  also write a C header for the `export \"C\"` functions\n"
-          "  -O0 -O1 -O2        optimisation level (default -O1)\n"
+          "  -O0 -O1 -O2        optimisation level (default -O0)\n"
           "  -g                 debug information\n"
           "  -l<name> -L<dir> -I<dir> -D<k=v>   options passed to clang\n"
           "  --cc <path>        use this clang\n"
