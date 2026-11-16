@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4
+
+Brought up to date with zevic-lang/zevic 0.4.4:
+
+- Windows: threads started by `Thread.Spawn` (and `Async.Spawn`) register with the Boehm GC
+- Optimisation: `zevic` and `zevpm` build with `-O0` by default. `zevpm build --release` keeps `-O2`
+
 ## 0.4.3
 
 Brought up to date with zevic-lang/zevic 0.4.3:
