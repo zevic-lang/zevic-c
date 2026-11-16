@@ -6,7 +6,7 @@ extern "C" {
     fn puts(s: CString) -> CInt
     fn abs(n: CInt) -> CInt
     fn strlen(s: CString) -> CSizeT
-    fn labs(n: CLongLong) -> CLongLong
+    fn llabs(n: CLongLong) -> CLongLong
     fn sqrt(x: CDouble) -> CDouble
 }
 
@@ -17,7 +17,7 @@ fn Main() {
     Console.Println("abs = ${abs((-5).ToCInt()).ToI32()}")
     Console.Println("strlen = ${strlen("héllo".ToC()).ToU64()}")
     let big: I64 = -9000000000
-    Console.Println("labs = ${labs(big.ToCLongLong()).ToI64()}")
+    Console.Println("labs = ${llabs(big.ToCLongLong()).ToI64()}")
     Console.Println("sqrt = ${sqrt(2.25.ToCDouble()).ToF64()}")
     let wide: I64 = 5000000000
     Console.Println("wrapped = ${wide.ToCIntWrap().ToI32()}")
