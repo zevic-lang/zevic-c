@@ -1,0 +1,54 @@
+module Zevic.Thread
+
+// OS threads that can be waited for. `Spawn` starts a function on a new thread and `Join` waits until it ends.
+// Unlike `Async.Spawn`, no value comes back: pass results through a `Channel` or a `Mutex`.
+// A `Panic` on any thread ends the whole process.
+//
+//     mut t: Thread.Thread = Thread.Spawn(() => Console.Println("hi"))
+//     t.Join()
+
+extern "zevic" {
+    fn zevic_thread_spawn(f: fn() -> Unit) -> *CVoid
+    fn zevic_thread_join(h: *CVoid)
+    fn zevic_thread_detach(h: *CVoid)
+    fn zevic_thread_yield()
+}
+
+// A thread started by `Spawn`.
+class Thread {
+    handle: *CVoid
+    joined: Bool
+
+    fn Init(h: *CVoid) {
+        this.handle = h
+        this.joined = false
+    }
+
+    // Waits until the thread ends. Joining the same thread twice is a Panic.
+    mut fn Join() {
+        if (this.joined) {
+            Panic("thread already joined")
+        }
+        zevic_thread_join(this.handle)
+        this.joined = true
+    }
+
+    // Lets the thread run on its own: nothing waits for it, and it cannot be joined afterwards.
+    mut fn Detach() {
+        if (this.joined) {
+            Panic("thread already joined")
+        }
+        zevic_thread_detach(this.handle)
+        this.joined = true
+    }
+}
+
+// Starts `f` on a new thread.
+fn Spawn(f: fn() -> Unit) -> Thread {
+    Thread.New(zevic_thread_spawn(f))
+}
+
+// Lets other threads run for a moment.
+fn Yield() {
+    zevic_thread_yield()
+}

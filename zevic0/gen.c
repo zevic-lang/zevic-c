@@ -1180,6 +1180,16 @@ static Val gen_float_arith(FnCtx *F, TokKind op, Val a, Val b) {
 }
 
 static Val gen_eq(FnCtx *F, Val a, Val b, Pos pos);
+static Place spill(FnCtx *F, Val v);
+static Node *find_member_fn(Type *t, const char *name);
+static Val call_method_vals(FnCtx *F, Type *t, Node *fn, Val recv_obj, Val *args, int nargs, Pos pos, Type *expect);
+/* A struct's methods take `this` by pointer: put the value in memory and pass its address. */
+static Val method_receiver(FnCtx *F, Val a) {
+    if (a.t->k != T_STRUCT) return a;
+    Place pl = spill(F, a);
+    Val v = {a.t, pl.ptr};
+    return v;
+}
 
 static Val gen_compare(FnCtx *F, TokKind op, Val a, Val b, Pos pos) {
     Type *t = a.t;
@@ -1246,6 +1256,18 @@ static Val gen_compare(FnCtx *F, TokKind op, Val a, Val b, Pos pos) {
         emit(F, "%s = xor i1 %s, true", n, e.v);
         Val res2 = {ty_bool, n};
         return res2;
+    }
+    if (t->k == T_STRUCT || t->k == T_CLASS) {
+        /* a < b is a.Compare(b) < 0 for a type that implements Comparable */
+        Node *cmp = find_member_fn(t, "Compare");
+        if (cmp && !cmp->is_static) {
+            Val args[1] = {b};
+            Val c = call_method_vals(F, t, cmp, method_receiver(F, a), args, 1, pos, ty_i32);
+            if (is_err(c.t)) return err_val();
+            const char *p = op == TK_LT ? "slt" : op == TK_LE ? "sle" : op == TK_GT ? "sgt" : "sge";
+            emit(F, "%s = icmp %s i32 %s, 0", r, p, c.v);
+            return res;
+        }
     }
     if (op == TK_EQEQ || op == TK_NEQ)
         diag_error(pos, "values of type `%s` cannot be compared with `%s`", t->name, tok_name(op));
@@ -4309,7 +4331,15 @@ static Val gen_eq_enum(FnCtx *F, Val a, Val b, Pos pos) {
 static Val gen_eq(FnCtx *F, Val a, Val b, Pos pos) {
     Type *t = a.t;
     if (is_err(t) || is_err(b.t)) return err_val();
-    if (t->k == T_STRUCT) return gen_eq_parts(F, &obj_tuple(t)->args, a, b, pos);
+    if (t->k == T_STRUCT) {
+        /* a struct that implements Equatable compares with its own Equals */
+        Node *eq = find_member_fn(t, "Equals");
+        if (eq && !eq->is_static) {
+            Val args[1] = {b};
+            return call_method_vals(F, t, eq, method_receiver(F, a), args, 1, pos, ty_bool);
+        }
+        return gen_eq_parts(F, &obj_tuple(t)->args, a, b, pos);
+    }
     if (t->k == T_TUPLE) return gen_eq_parts(F, &t->args, a, b, pos);
     if (t->k == T_ENUM) return gen_eq_enum(F, a, b, pos);
     if (t->k == T_CLASS) {

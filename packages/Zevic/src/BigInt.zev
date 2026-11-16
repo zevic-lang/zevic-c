@@ -1,0 +1,350 @@
+module Zevic.BigInt
+
+import Zevic.Bytes
+
+// Integers of any size. `BigInt` is a value that cannot change: every operation returns a new one.
+// There are no operators for it, so the arithmetic is written with methods; `==` and `<` work because it
+// implements `Equatable` and `Comparable`.
+//
+//     let a: BigInt = BigInt.FromI64(2).Pow(100)
+//     Console.Println(a.ToString())                       // 1267650600228229401496703205376
+//     let q: BigInt = a.DivRem(BigInt.FromI64(3))         // quotient and remainder as a pair
+//     let n: BigInt = BigInt.Parse("-42")?
+//
+// Inside, a magnitude is an array of 32-bit limbs, least significant first, with no zero limbs at the top.
+// Zero is the empty array and is never negative.
+
+// ---- magnitudes (private) ----
+
+fn magTrim(a: Array<U32>) -> Array<U32> {
+    mut n: I64 = a.Len()
+    while (n > 0 && a[n - 1] == 0_U32) {
+        n -= 1
+    }
+    a.Slice(0, n)
+}
+
+fn magCmp(a: Array<U32>, b: Array<U32>) -> I32 {
+    if (a.Len() != b.Len()) {
+        return if (a.Len() < b.Len()) { -1 } else { 1 }
+    }
+    mut i: I64 = a.Len() - 1
+    while (i >= 0) {
+        if (a[i] != b[i]) {
+            return if (a[i] < b[i]) { -1 } else { 1 }
+        }
+        i -= 1
+    }
+    0
+}
+
+fn magAdd(a: Array<U32>, b: Array<U32>) -> Array<U32> {
+    let top: I64 = if (a.Len() > b.Len()) { a.Len() } else { b.Len() }
+    mut out: Array<U32> = []
+    mut carry: U64 = 0_U64
+    mut i: I64 = 0
+    while (i < top) {
+        let x: U64 = if (i < a.Len()) { a[i].ToU64() } else { 0_U64 }
+        let y: U64 = if (i < b.Len()) { b[i].ToU64() } else { 0_U64 }
+        let s: U64 = x + y + carry
+        out.Push((s & 4294967295_U64).ToU32Wrap())
+        carry = s >> 32
+        i += 1
+    }
+    if (carry > 0_U64) {
+        out.Push(carry.ToU32Wrap())
+    }
+    magTrim(out)
+}
+
+// a - b, where a >= b.
+fn magSub(a: Array<U32>, b: Array<U32>) -> Array<U32> {
+    mut out: Array<U32> = []
+    mut borrow: I64 = 0
+    mut i: I64 = 0
+    while (i < a.Len()) {
+        let x: I64 = a[i].ToI64()
+        let y: I64 = if (i < b.Len()) { b[i].ToI64() } else { 0 }
+        mut d: I64 = x - y - borrow
+        if (d < 0) {
+            d += 4294967296
+            borrow = 1
+        } else {
+            borrow = 0
+        }
+        out.Push(d.ToU32Wrap())
+        i += 1
+    }
+    magTrim(out)
+}
+
+fn magMul(a: Array<U32>, b: Array<U32>) -> Array<U32> {
+    if (a.Len() == 0 || b.Len() == 0) {
+        return []
+    }
+    mut out: Array<U32> = Array<U32>.Repeat(0_U32, a.Len() + b.Len())
+    mut i: I64 = 0
+    while (i < a.Len()) {
+        mut carry: U64 = 0_U64
+        mut j: I64 = 0
+        while (j < b.Len()) {
+            // At most (2^32 - 1)^2 + 2 * (2^32 - 1), which still fits in 64 bits.
+            let cur: U64 = out[i + j].ToU64() + a[i].ToU64() * b[j].ToU64() + carry
+            out.SetIndex(i + j, (cur & 4294967295_U64).ToU32Wrap())
+            carry = cur >> 32
+            j += 1
+        }
+        out.SetIndex(i + b.Len(), carry.ToU32Wrap())
+        i += 1
+    }
+    magTrim(out)
+}
+
+// a * m + add, for a small m and add.
+fn magMulSmall(a: Array<U32>, m: U32, add: U32) -> Array<U32> {
+    mut out: Array<U32> = []
+    mut carry: U64 = add.ToU64()
+    mut i: I64 = 0
+    while (i < a.Len()) {
+        let cur: U64 = a[i].ToU64() * m.ToU64() + carry
+        out.Push((cur & 4294967295_U64).ToU32Wrap())
+        carry = cur >> 32
+        i += 1
+    }
+    if (carry > 0_U64) {
+        out.Push(carry.ToU32Wrap())
+    }
+    magTrim(out)
+}
+
+// The quotient and the remainder of a / d for a small d > 0, as [quotient, [remainder]].
+fn magDivSmall(a: Array<U32>, d: U32) -> Array<Array<U32>> {
+    mut q: Array<U32> = Array<U32>.Repeat(0_U32, a.Len())
+    mut rem: U64 = 0_U64
+    mut i: I64 = a.Len() - 1
+    while (i >= 0) {
+        let cur: U64 = (rem << 32) | a[i].ToU64()
+        q.SetIndex(i, (cur / d.ToU64()).ToU32Wrap())
+        rem = cur % d.ToU64()
+        i -= 1
+    }
+    [magTrim(q), [rem.ToU32Wrap()]]
+}
+
+// (a << 1) | bit
+fn magShl1(a: Array<U32>, bit: U32) -> Array<U32> {
+    mut out: Array<U32> = []
+    mut carry: U64 = bit.ToU64()
+    mut i: I64 = 0
+    while (i < a.Len()) {
+        let s: U64 = (a[i].ToU64() << 1) | carry
+        out.Push((s & 4294967295_U64).ToU32Wrap())
+        carry = s >> 32
+        i += 1
+    }
+    if (carry > 0_U64) {
+        out.Push(carry.ToU32Wrap())
+    }
+    magTrim(out)
+}
+
+// Long division, one bit at a time. Returns [quotient, remainder]. b must not be zero.
+fn magDivRem(a: Array<U32>, b: Array<U32>) -> Array<Array<U32>> {
+    mut q: Array<U32> = Array<U32>.Repeat(0_U32, a.Len())
+    mut r: Array<U32> = []
+    mut i: I64 = a.Len() - 1
+    while (i >= 0) {
+        mut bit: I64 = 31
+        while (bit >= 0) {
+            let inBit: U32 = (a[i] >> bit.ToI32Wrap()) & 1_U32
+            r = magShl1(r, inBit)
+            if (magCmp(r, b) >= 0) {
+                r = magSub(r, b)
+                let cur: U32 = q[i]
+                q.SetIndex(i, cur | (1_U32 << bit.ToI32Wrap()))
+            }
+            bit -= 1
+        }
+        i -= 1
+    }
+    [magTrim(q), r]
+}
+
+// Splits a U64 into two limbs.
+fn magFromU64(u: U64) -> Array<U32> {
+    magTrim([(u & 4294967295_U64).ToU32Wrap(), (u >> 32).ToU32Wrap()])
+}
+
+// ---- BigInt ----
+
+struct BigInt : Comparable {
+    neg: Bool
+    mag: Array<U32>
+
+    // Makes a value from a sign and a magnitude. Zero is never negative.
+    fn Init(neg: Bool, mag: Array<U32>) {
+        this.neg = neg && mag.Len() > 0
+        this.mag = mag
+    }
+
+    fn IsZero() -> Bool { this.mag.Len() == 0 }
+
+    fn Neg() -> BigInt { BigInt.New(!this.neg, this.mag) }
+
+    fn Abs() -> BigInt { BigInt.New(false, this.mag) }
+
+    fn Add(b: BigInt) -> BigInt {
+        if (this.neg == b.neg) {
+            return BigInt.New(this.neg, magAdd(this.mag, b.mag))
+        }
+        if (magCmp(this.mag, b.mag) >= 0) {
+            return BigInt.New(this.neg, magSub(this.mag, b.mag))
+        }
+        BigInt.New(b.neg, magSub(b.mag, this.mag))
+    }
+
+    fn Sub(b: BigInt) -> BigInt { this.Add(b.Neg()) }
+
+    fn Mul(b: BigInt) -> BigInt { BigInt.New(this.neg != b.neg, magMul(this.mag, b.mag)) }
+
+    // The quotient rounds toward 0, and the remainder has the sign of this value. Dividing by zero is a Panic.
+    fn DivRem(b: BigInt) -> (BigInt, BigInt) {
+        if (b.IsZero()) {
+            Panic("BigInt division by zero")
+        }
+        let parts: Array<Array<U32>> = magDivRem(this.mag, b.mag)
+        let q: Array<U32> = parts[0]
+        let r: Array<U32> = parts[1]
+        (BigInt.New(this.neg != b.neg, q), BigInt.New(this.neg, r))
+    }
+
+    // A power with an exponent of 0 or more. A negative exponent is a Panic.
+    fn Pow(e: I64) -> BigInt {
+        if (e < 0) {
+            Panic("BigInt.Pow with a negative exponent")
+        }
+        mut result: BigInt = FromI64(1)
+        mut base: BigInt = this
+        mut n: I64 = e
+        while (n > 0) {
+            if (n % 2 == 1) {
+                result = result.Mul(base)
+            }
+            n = n / 2
+            if (n > 0) {
+                base = base.Mul(base)
+            }
+        }
+        result
+    }
+
+    // Decimal digits with a leading - when negative.
+    fn ToString() -> String {
+        if (this.IsZero()) {
+            return "0"
+        }
+        // Digits come out least significant first, nine at a time.
+        mut digits: Array<U8> = []
+        mut cur: Array<U32> = this.mag
+        while (cur.Len() > 0) {
+            let parts: Array<Array<U32>> = magDivSmall(cur, 1000000000_U32)
+            cur = parts[0]
+            mut v: U32 = parts[1][0]
+            let last: Bool = cur.Len() == 0
+            mut k: I64 = 0
+            while (k < 9 && (!last || v > 0_U32)) {
+                digits.Push((48_U32 + v % 10_U32).ToU8Wrap())
+                v = v / 10_U32
+                k += 1
+            }
+        }
+        digits.Reverse()
+        mut out: Array<U8> = []
+        if (this.neg) {
+            out.Push(45_U8)
+        }
+        mut i: I64 = 0
+        while (i < digits.Len()) {
+            out.Push(digits[i])
+            i += 1
+        }
+        Bytes.ToStringLossy(out)
+    }
+
+    // The value as an I64, or an Err when it does not fit.
+    fn ToI64() -> Result<I64, Error> {
+        if (this.mag.Len() > 2) {
+            return Err(Error.New(ErrorKind.OutOfRange, "${this.ToString()} does not fit in I64"))
+        }
+        mut u: U64 = 0_U64
+        if (this.mag.Len() > 0) {
+            u = this.mag[0].ToU64()
+        }
+        if (this.mag.Len() > 1) {
+            u = u | (this.mag[1].ToU64() << 32)
+        }
+        if (!this.neg) {
+            if (u > 9223372036854775807_U64) {
+                return Err(Error.New(ErrorKind.OutOfRange, "${this.ToString()} does not fit in I64"))
+            }
+            return Ok(u.ToI64Wrap())
+        }
+        if (u > 9223372036854775808_U64) {
+            return Err(Error.New(ErrorKind.OutOfRange, "${this.ToString()} does not fit in I64"))
+        }
+        if (u == 9223372036854775808_U64) {
+            return Ok(-9223372036854775807 - 1)
+        }
+        Ok(0 - u.ToI64Wrap())
+    }
+
+    fn Equals(other: BigInt) -> Bool {
+        this.neg == other.neg && magCmp(this.mag, other.mag) == 0
+    }
+
+    fn Compare(other: BigInt) -> I32 {
+        if (this.neg != other.neg) {
+            return if (this.neg) { -1 } else { 1 }
+        }
+        let c: I32 = magCmp(this.mag, other.mag)
+        if (this.neg) {
+            return 0 - c
+        }
+        c
+    }
+}
+
+// ---- module functions (the way to start a value: BigInt.FromI64(3), BigInt.Parse("12")) ----
+
+fn FromI64(x: I64) -> BigInt {
+    if (x < 0) {
+        // -(x + 1) fits in I64 even for the smallest value, and the +1 is done in U64.
+        let m: U64 = (0 - (x + 1)).ToU64Wrap() + 1_U64
+        return BigInt.New(true, magFromU64(m))
+    }
+    BigInt.New(false, magFromU64(x.ToU64Wrap()))
+}
+
+// Reads an optional sign (+ or -) and decimal digits. Anything else is an Err.
+fn Parse(s: String) -> Result<BigInt, Error> {
+    let b: Array<U8> = Bytes.FromString(s)
+    mut i: I64 = 0
+    mut neg: Bool = false
+    if (b.Len() > 0 && (b[0] == 45_U8 || b[0] == 43_U8)) {
+        neg = b[0] == 45_U8
+        i = 1
+    }
+    if (i >= b.Len()) {
+        return Err(Error.New(ErrorKind.InvalidFormat, "not an integer: ${s}"))
+    }
+    mut mag: Array<U32> = []
+    while (i < b.Len()) {
+        let c: U8 = b[i]
+        if (c < 48_U8 || c > 57_U8) {
+            return Err(Error.New(ErrorKind.InvalidFormat, "not an integer: ${s}"))
+        }
+        mag = magMulSmall(mag, 10_U32, (c - 48_U8).ToU32())
+        i += 1
+    }
+    Ok(BigInt.New(neg, mag))
+}

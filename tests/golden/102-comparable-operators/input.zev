@@ -1,0 +1,45 @@
+module Main
+
+import Zevic.Console
+
+// Ordered by major, then minor. Equals compares the major part only.
+struct Version : Comparable {
+    major: I64
+    minor: I64
+
+    fn Init(major: I64, minor: I64) {
+        this.major = major
+        this.minor = minor
+    }
+
+    fn Equals(other: Version) -> Bool {
+        this.major == other.major
+    }
+
+    fn Compare(other: Version) -> I32 {
+        if (this.major != other.major) {
+            return if (this.major < other.major) { -1 } else { 1 }
+        }
+        if (this.minor < other.minor) {
+            return -1
+        }
+        if (this.minor > other.minor) {
+            return 1
+        }
+        0
+    }
+}
+
+fn Main() {
+    let a: Version = Version.New(1, 2)
+    let b: Version = Version.New(1, 10)
+    let c: Version = Version.New(2, 0)
+    let d: Version = Version.New(1, 99)
+    let lt: Bool = a < b
+    let le: Bool = a <= d
+    let gt: Bool = c > b
+    let ge: Bool = b >= a
+    Console.Println("lt=${lt} le=${le} gt=${gt} ge=${ge}")
+    Console.Println("lt2=${c < a} gt2=${a > c}")
+    Console.Println("eq=${a == d} neq=${a != c}")
+}

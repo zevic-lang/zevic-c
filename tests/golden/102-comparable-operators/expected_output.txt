@@ -1,0 +1,3 @@
+lt=true le=true gt=true ge=true
+lt2=false gt2=false
+eq=true neq=true

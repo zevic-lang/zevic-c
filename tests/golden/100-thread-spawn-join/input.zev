@@ -1,0 +1,19 @@
+module Main
+
+import Zevic.Console
+import Zevic.Async
+import Zevic.Thread
+
+fn Main() {
+    mut ch: Async.Channel<I64> = Async.Channel.New(0)
+    mut t1: Thread.Thread = Thread.Spawn(() => { ch.Send(1) })
+    mut t2: Thread.Thread = Thread.Spawn(() => { ch.Send(2) })
+    t1.Join()
+    t2.Join()
+    ch.Close()
+    let a: I64 = ch.Recv().Unwrap()
+    let b: I64 = ch.Recv().Unwrap()
+    Console.Println("sum ${a + b}")
+    Thread.Yield()
+    Console.Println("done")
+}
